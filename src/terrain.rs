@@ -3,6 +3,8 @@ use bevy_ecs_tilemap::prelude::*;
 use bevy_rapier2d::prelude::{Collider, RigidBody, Vect};
 use ndarray::prelude::*;
 
+use crate::{material::MaterialProperties, app_state::AppState};
+
 #[derive(Resource)]
 pub(crate) struct TerrainConfig {
     pub(crate) width: u32,
@@ -35,6 +37,7 @@ fn setup_terrain(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     config: Res<TerrainConfig>,
+    material_properties: Res<MaterialProperties>,
 ) {
     let texture_handle = asset_server.load("textures/terrain.png");
 
@@ -67,7 +70,8 @@ fn setup_terrain(
         let tile_storage: &mut TileStorage = &mut tile_storage;
         for x in 0..size.x {
             for y in 0..size.y {
-                if materials[[x as usize, y as usize]] == 0 {
+                let tile_material = materials[[x as usize, y as usize]];
+                if tile_material == 0 {
                     continue;
                 }
 
@@ -77,12 +81,13 @@ fn setup_terrain(
                 };
 
                 let texture_index =
-                    TileTextureIndex(materials[[x as usize, y as usize]] as u32 - 1);
+                    TileTextureIndex(0);
                 let tile_entity = commands
                     .spawn(TileBundle {
                         position: tile_pos,
                         tilemap_id,
                         texture_index,
+                        color: material_properties.0[tile_material as usize].color.into(),
                         ..default()
                     })
                     .id();
@@ -163,7 +168,7 @@ fn remove_destroyed_tiles(
     mut commands: Commands,
     config: Res<TerrainConfig>,
     tile_query: Query<(Entity, &TileHealth, &TilePos)>,
-    mut tilemap_query: Query<(Entity, &mut TileStorage)>,
+    mut tilemap_query: Query<(Entity, &mut TileStorage), With<Terrain>>,
     mut destroyed_tiles: EventWriter<TileDestroyedEvent>,
 ) {
     let (tilemap_entity, mut tile_storage) = tilemap_query.single_mut();
@@ -217,12 +222,13 @@ impl Plugin for TerrainPlugin {
         app.init_resource::<TerrainConfig>()
             .add_event::<TileDamageEvent>()
             .add_event::<TileDestroyedEvent>()
-            .add_startup_system(setup_terrain)
-            .add_system(update_terrain.in_set(TerrainSet::Update))
-            .add_system(color_damage_tile.in_set(TerrainSet::Update))
+            .add_system(setup_terrain.in_schedule(OnEnter(AppState::Game)))
+            .add_system(update_terrain.in_set(OnUpdate(AppState::Game)).in_set(TerrainSet::Update))
+            .add_system(color_damage_tile.in_set(OnUpdate(AppState::Game)).in_set(TerrainSet::Update))
             .add_system(
                 remove_destroyed_tiles
                     .after(TerrainSet::Update)
+                    .in_set(OnUpdate(AppState::Game))
                     .in_set(TerrainSet::Cleanup),
             );
     }

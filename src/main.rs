@@ -1,3 +1,5 @@
+use app_state::AppState;
+use app_state::AppStatePlugin;
 use basebuilder::BasebuilderPlugin;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::TilemapPlugin;
@@ -10,13 +12,18 @@ use bevy_rapier2d::{
 use cursor_position::CursorPositionPlugin;
 use dude::DudePlugin;
 use hovered_tile::HoveredTilePlugin;
+use load::LoadPlugin;
+use material::{MaterialPlugin, MaterialsState};
 use pan_zoom_camera2d::PanZoomCamera2dPlugin;
 use terrain::TerrainPlugin;
 
+mod app_state;
 mod basebuilder;
 mod cursor_position;
 mod dude;
 mod hovered_tile;
+mod load;
+mod material;
 mod pan_zoom_camera2d;
 mod terrain;
 
@@ -45,8 +52,11 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default());
 
     // Add crate plugins
-    app.add_plugin(CursorPositionPlugin)
+    app.add_plugin(AppStatePlugin)
+        .add_plugin(LoadPlugin)
+        .add_plugin(CursorPositionPlugin)
         .add_plugin(PanZoomCamera2dPlugin)
+        .add_plugin(MaterialPlugin)
         .add_plugin(TerrainPlugin)
         .add_plugin(BasebuilderPlugin)
         .add_plugin(HoveredTilePlugin)
