@@ -1,16 +1,10 @@
-use bevy::{
-    math::{Vec3Swizzles, Vec4Swizzles},
-    prelude::*,
-    sprite::MaterialMesh2dBundle,
-};
-use bevy_ecs_tilemap::{
-    prelude::{TilemapGridSize, TilemapSize},
-    tiles::{TilePos, TileStorage},
-};
+use bevy::{math::Vec3Swizzles, prelude::*, sprite::MaterialMesh2dBundle};
+use bevy_ecs_tilemap::tiles::TilePos;
 use bevy_rapier2d::prelude::{Collider, KinematicCharacterController, RigidBody};
 
 use crate::{
     cursor_position::CursorPosition,
+    hovered_tile::HoveredTile,
     terrain::{TerrainSet, TileDamageEvent, TileDestroyedEvent},
 };
 
@@ -39,7 +33,7 @@ fn setup(
     ));
 }
 
-fn move_dude(
+fn move_dude_keyboard(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<(Entity, &mut KinematicCharacterController), With<Dude>>,
@@ -71,6 +65,7 @@ fn move_dude(
 
 #[derive(Component, Reflect)]
 struct Target {
+    entity: Option<Entity>,
     position: Vec2,
 }
 
@@ -80,7 +75,7 @@ struct Mining {
     target: Entity,
 }
 
-#[derive(SystemLabel)]
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 enum DudeSet {
     Input,
     Action,
@@ -97,25 +92,18 @@ fn move_dude_to_target(
         ),
         (With<Dude>, Without<Mining>),
     >,
-    tilemap_query: Query<(&Transform, &TileStorage, &TilemapSize)>,
+    hovered_tile_query: Query<Entity, With<TilePos>>,
 ) {
     for (dude_entity, mut controller, transform, target) in &mut dude_query {
         let distance = target.position - transform.translation.xy();
         if distance.length() < 30. {
-            let (tilemap_transform, tilemap, tilemap_size) = tilemap_query.single();
-            let target_position_in_tilemap = tilemap_transform.compute_matrix().inverse()
-                * target.position.extend(1.).extend(1.);
-            let tile_pos = TilePos::from_world_pos(
-                &target_position_in_tilemap.xy(),
-                tilemap_size,
-                &Vec2::new(16., 16.).into(),
-                &bevy_ecs_tilemap::prelude::TilemapType::Square,
-            );
-            if let Some(Some(tile)) = tile_pos.map(|pos| tilemap.checked_get(&pos)) {
-                commands.entity(dude_entity).insert(Mining {
-                    timer: Timer::from_seconds(0.1, TimerMode::Repeating),
-                    target: tile,
-                });
+            if let Some(target_entity) = target.entity {
+                if hovered_tile_query.contains(target_entity) {
+                    commands.entity(dude_entity).insert(Mining {
+                        timer: Timer::from_seconds(0.1, TimerMode::Repeating),
+                        target: target_entity,
+                    });
+                }
             }
         } else {
             controller.translation = Some(distance.normalize());
@@ -149,7 +137,7 @@ fn mining_tick(
         if mining.timer.tick(time.delta()).finished() {
             tile_damage_events.send(TileDamageEvent {
                 tile: mining.target,
-                damage: 3,
+                damage: 10,
             });
         }
     }
@@ -160,11 +148,13 @@ fn pick_target(
     dude_query: Query<Entity, With<Dude>>,
     mouse_button_input: Res<Input<MouseButton>>,
     cursor_position: Res<CursorPosition>,
+    hovered_tile_query: Query<Entity, With<HoveredTile>>,
 ) {
     if mouse_button_input.just_pressed(MouseButton::Left) {
         let target_position = Vec2::new(cursor_position.0.x, cursor_position.0.y);
         for dude_entity in &dude_query {
             commands.entity(dude_entity).insert(Target {
+                entity: hovered_tile_query.get_single().ok(),
                 position: target_position,
             });
         }
@@ -178,14 +168,14 @@ impl Plugin for DudePlugin {
         app.register_type::<Target>()
             .register_type::<Mining>()
             .add_startup_system(setup)
-            .add_system(move_dude.label(DudeSet::Input))
-            .add_system(move_dude_to_target.label(DudeSet::Input))
-            .add_system(pick_target.label(DudeSet::Input))
-            .add_system(dude_gravity.after(DudeSet::Input))
+            .add_system(move_dude_keyboard.in_set(DudeSet::Input))
+            .add_system(pick_target.in_set(DudeSet::Input))
+            .add_system(move_dude_to_target.after(DudeSet::Input))
+            .add_system(dude_gravity.after(move_dude_to_target))
             .add_system(
                 mining_tick
                     .before(TerrainSet::Update)
-                    .label(DudeSet::Action),
+                    .in_set(DudeSet::Action),
             );
     }
 }

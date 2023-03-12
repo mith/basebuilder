@@ -22,6 +22,7 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}",
+            "sourceLanguages": ["rust"],
             "env": {
                 "CARGO_MANIFEST_DIR": "${workspaceFolder}",
                 "RUST_LOG": "warn,basebuilder=info,winit=error"
@@ -44,7 +45,8 @@
                 }
             },
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "sourceLanguages": ["rust"],
         }
     ]
 }

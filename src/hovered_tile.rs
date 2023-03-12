@@ -1,24 +1,18 @@
-use bevy::{
-    math::{Vec3Swizzles, Vec4Swizzles},
-    prelude::*,
-};
+use bevy::{math::Vec4Swizzles, prelude::*};
 use bevy_ecs_tilemap::{
     prelude::{TilemapGridSize, TilemapSize, TilemapType},
-    tiles::{TilePos, TileStorage},
+    tiles::{TileColor, TilePos, TileStorage},
 };
 
-use crate::{cursor_position::CursorPosition, terrain::TerrainConfig};
+use crate::cursor_position::CursorPosition;
 
-#[derive(Resource)]
-pub(crate) struct HoveredTile {
-    pub entity: Entity,
-    pub tile_center: Vec2,
-}
+#[derive(Component)]
+pub(crate) struct HoveredTile;
 
-pub(crate) fn hovered_tile(
-    terrain_config: Res<TerrainConfig>,
+fn hovered_tile(
+    mut commands: Commands,
     cursor_pos: Res<CursorPosition>,
-    mut hovered_tile: ResMut<HoveredTile>,
+    hovered_tiles_query: Query<Entity, With<HoveredTile>>,
     chunks_query: Query<(
         &Transform,
         &TileStorage,
@@ -36,22 +30,40 @@ pub(crate) fn hovered_tile(
             cursor_in_chunk_pos.xy()
         };
 
-        if let Some(tile_pos) =
+        if let Some(tile_entity) =
             TilePos::from_world_pos(&cursor_in_chunk_pos, chunk_size, grid_size, map_type)
+                .as_ref()
+                .and_then(|tile_pos| tile_storage.get(tile_pos))
         {
-            if let Some(tile_entity) = tile_storage.get(&tile_pos) {
-                let tile_center = tile_pos.center_in_world(
-                    &TilemapGridSize {
-                        x: terrain_config.cell_size,
-                        y: terrain_config.cell_size,
-                    },
-                    map_type,
-                );
-                *hovered_tile = HoveredTile {
-                    entity: tile_entity,
-                    tile_center: chunk_transform.translation.xy() + tile_center,
-                };
+            commands.entity(tile_entity).insert(HoveredTile);
+            for hovered_tile in &mut hovered_tiles_query.iter() {
+                if hovered_tile != tile_entity {
+                    commands.entity(hovered_tile).remove::<HoveredTile>();
+                }
             }
+        } else {
+            for hovered_tile in &mut hovered_tiles_query.iter() {
+                commands.entity(hovered_tile).remove::<HoveredTile>();
+            }
+        }
+    }
+}
+
+const HIGHLIGHT_COLOR: Color = Color::rgb(1., 1., 0.2);
+
+fn highlight_hovered_tile(mut tile_query: Query<&mut TileColor, Added<HoveredTile>>) {
+    for mut tile_color in &mut tile_query {
+        tile_color.0 = HIGHLIGHT_COLOR;
+    }
+}
+
+fn unhighlight_hovered_tile(
+    mut hovered_tiles_removed: RemovedComponents<HoveredTile>,
+    mut tile_query: Query<&mut TileColor>,
+) {
+    for tile_entity in hovered_tiles_removed.iter() {
+        if let Ok(mut tile_color) = tile_query.get_mut(tile_entity) {
+            tile_color.0 = Color::WHITE;
         }
     }
 }
@@ -60,6 +72,14 @@ pub(crate) struct HoveredTilePlugin;
 
 impl Plugin for HoveredTilePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(hovered_tile);
+        app.add_systems(
+            (
+                hovered_tile,
+                apply_system_buffers,
+                highlight_hovered_tile,
+                unhighlight_hovered_tile,
+            )
+                .chain(),
+        );
     }
 }

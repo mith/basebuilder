@@ -1,3 +1,4 @@
+use basebuilder::BasebuilderPlugin;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::TilemapPlugin;
 #[cfg(feature = "inspector")]
@@ -6,13 +7,18 @@ use bevy_rapier2d::{
     prelude::{NoUserData, RapierPhysicsPlugin},
     render::RapierDebugRenderPlugin,
 };
+use cursor_position::CursorPositionPlugin;
+use dude::DudePlugin;
+use hovered_tile::HoveredTilePlugin;
+use pan_zoom_camera2d::PanZoomCamera2dPlugin;
+use terrain::TerrainPlugin;
 
 mod basebuilder;
 mod cursor_position;
-mod pan_zoom_camera2d;
-mod terrain;
 mod dude;
 mod hovered_tile;
+mod pan_zoom_camera2d;
+mod terrain;
 
 fn main() {
     let mut app = App::new();
@@ -20,12 +26,10 @@ fn main() {
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
-                window: WindowDescriptor {
+                primary_window: Some(Window {
                     fit_canvas_to_parent: true,
-                    #[cfg(not(feature = "inspector"))]
-                    cursor_visible: false,
                     ..default()
-                },
+                }),
                 ..default()
             })
             .set(ImagePlugin::default_nearest()),
@@ -33,7 +37,7 @@ fn main() {
     .insert_resource(ClearColor(Color::BLACK));
 
     #[cfg(feature = "inspector")]
-    app.add_plugin(WorldInspectorPlugin);
+    app.add_plugin(WorldInspectorPlugin::default());
 
     // Add third-party plugins
     app.add_plugin(TilemapPlugin)
@@ -41,11 +45,12 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default());
 
     // Add crate plugins
-    app.add_plugin(cursor_position::CursorPositionPlugin)
-        .add_plugin(pan_zoom_camera2d::PanZoomCamera2dPlugin)
-        .add_plugin(terrain::TerrainPlugin)
-        .add_plugin(basebuilder::BasebuilderPlugin)
-        .add_plugin(dude::DudePlugin);
+    app.add_plugin(CursorPositionPlugin)
+        .add_plugin(PanZoomCamera2dPlugin)
+        .add_plugin(TerrainPlugin)
+        .add_plugin(BasebuilderPlugin)
+        .add_plugin(HoveredTilePlugin)
+        .add_plugin(DudePlugin);
 
     app.run();
 }

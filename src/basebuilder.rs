@@ -13,7 +13,7 @@ impl Default for BasebuilderConfig {
     }
 }
 
-pub(crate) fn setup_camera(mut commands: Commands, config: Res<BasebuilderConfig>) {
+pub(crate) fn setup_camera(mut commands: Commands) {
     commands.spawn(PanZoomCamera2dBundle::default());
 }
 

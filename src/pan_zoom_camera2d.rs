@@ -1,4 +1,4 @@
-use bevy::{input::mouse::MouseWheel, prelude::*};
+use bevy::{input::mouse::MouseWheel, prelude::*, window::PrimaryWindow};
 
 #[derive(Component)]
 pub struct PanZoomCamera2d {
@@ -24,24 +24,23 @@ pub struct PanZoomCamera2dBundle {
 }
 
 fn camera_zoom(
-    mut query: Query<(
+    mut camera_query: Query<(
         &mut Transform,
         &mut OrthographicProjection,
         &PanZoomCamera2d,
     )>,
     mut mouse_wheel_events: EventReader<MouseWheel>,
-    windows: Res<Windows>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let Some(window) = windows.get_primary() else {
+    let Ok(primary_window) = window_query.get_single() else {
         return;
     };
-
-    let Some(cursor_position) = window.cursor_position() else {
+    let Some(cursor_position) = primary_window.cursor_position() else {
         return;
     };
 
     for event in mouse_wheel_events.iter() {
-        for (mut transform, mut ortho, camera) in query.iter_mut() {
+        for (mut transform, mut ortho, camera) in camera_query.iter_mut() {
             let old_scale = ortho.scale;
             let mut zoom_change = ortho.scale * event.y * camera.zoom_speed;
             ortho.scale -= zoom_change;
@@ -56,7 +55,7 @@ fn camera_zoom(
 
             // Move the camera toward the cursor position to keep the current object
             // underneath it.
-            let from_center = cursor_position - Vec2::new(window.width() / 2., window.height() / 2.);
+            let from_center = cursor_position - Vec2::new(primary_window.width() / 2., primary_window.height() / 2.);
 
             let scaled_move = from_center * event.y * zoom_change.abs();
             transform.translation += Vec3::new(scaled_move.x, scaled_move.y, 0.);
@@ -73,7 +72,7 @@ struct DragStart {
 fn drag_camera(
     mut commands: Commands,
     mouse_button_input: Res<Input<MouseButton>>,
-    windows: Res<Windows>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
     undragged_cameras_query: Query<
         (Entity, &Transform),
         (With<PanZoomCamera2d>, Without<DragStart>),
@@ -83,9 +82,7 @@ fn drag_camera(
         (With<PanZoomCamera2d>, With<DragStart>),
     >,
 ) {
-    let Some(window) = windows.get_primary() else {
-        return;
-    };
+    let window = window_query.single();
 
     let Some(current_cursor_position) = window.cursor_position() else {
         return;

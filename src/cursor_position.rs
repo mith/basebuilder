@@ -1,13 +1,11 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::PrimaryWindow};
 
 pub(crate) fn cursor_position_in_world(
-    windows: &Windows,
+    window: &Window,
     cursor_position: Vec2,
     camera_transform: &GlobalTransform,
     camera: &Camera,
 ) -> Vec3 {
-    let window = windows.primary();
-
     let window_size = Vec2::new(window.width(), window.height());
 
     // Convert screen position [0..resolution] to ndc [-1..1]
@@ -21,7 +19,7 @@ pub(crate) fn cursor_position_in_world(
 pub(crate) struct CursorPosition(pub(crate) Vec3);
 
 fn update_cursor_pos(
-    windows: Res<Windows>,
+    window: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&GlobalTransform, &Camera)>,
     mut cursor_moved_events: EventReader<CursorMoved>,
     mut cursor_position: ResMut<CursorPosition>,
@@ -29,7 +27,7 @@ fn update_cursor_pos(
     if let Some(cursor_moved) = cursor_moved_events.iter().last() {
         for (camera_transform, camera) in &camera_query {
             *cursor_position = CursorPosition(cursor_position_in_world(
-                &windows,
+                &window.single(),
                 cursor_moved.position,
                 camera_transform,
                 camera,

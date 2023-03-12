@@ -1,9 +1,7 @@
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_rapier2d::prelude::{Collider, RigidBody, Vect};
-use iyes_loopless::prelude::AppLooplessStateExt;
 use ndarray::prelude::*;
-
 
 #[derive(Resource)]
 pub(crate) struct TerrainConfig {
@@ -23,14 +21,15 @@ impl Default for TerrainConfig {
 }
 
 #[derive(Component)]
-pub(crate) struct Terrain;
+pub(crate) struct Terrain {
+    materials: Array2<u16>,
+}
 
-#[derive(SystemLabel)]
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum TerrainSet {
     Update,
     Cleanup,
 }
-
 
 fn setup_terrain(
     mut commands: Commands,
@@ -44,21 +43,53 @@ fn setup_terrain(
         y: config.height,
     };
 
-    let mut tile_storage = TileStorage::empty(tilemap_size);
-    let tilemap_entity = commands.spawn((Terrain, Name::new("Terrain"))).id();
+    // create materials array with bottom half of map made of dirt, upper half empty air
+    let materials = Array2::from_shape_fn((100, 100), |(_x, y)| if y < 50 { 1 } else { 0 });
 
-    let y = config.height as u32 / 2;
-    fill_tilemap_rect(
-        TileTextureIndex(0),
-        TilePos { x: 0, y: 0 },
-        TilemapSize {
+    let mut tile_storage = TileStorage::empty(tilemap_size);
+    let tilemap_entity = commands
+        .spawn((
+            Terrain {
+                materials: materials.clone(),
+            },
+            Name::new("Terrain"),
+        ))
+        .id();
+
+    {
+        let origin = TilePos { x: 0, y: 0 };
+        let size = TilemapSize {
             x: config.width as u32,
             y: config.height as u32,
-        },
-        TilemapId(tilemap_entity),
-        &mut commands,
-        &mut tile_storage,
-    );
+        };
+        let tilemap_id = TilemapId(tilemap_entity);
+        let commands: &mut Commands = &mut commands;
+        let tile_storage: &mut TileStorage = &mut tile_storage;
+        for x in 0..size.x {
+            for y in 0..size.y {
+                if materials[[x as usize, y as usize]] == 0 {
+                    continue;
+                }
+
+                let tile_pos = TilePos {
+                    x: origin.x + x,
+                    y: origin.y + y,
+                };
+
+                let texture_index =
+                    TileTextureIndex(materials[[x as usize, y as usize]] as u32 - 1);
+                let tile_entity = commands
+                    .spawn(TileBundle {
+                        position: tile_pos,
+                        tilemap_id,
+                        texture_index,
+                        ..default()
+                    })
+                    .id();
+                tile_storage.set(&tile_pos, tile_entity);
+            }
+        }
+    };
 
     let tile_size = TilemapTileSize {
         x: config.cell_size,
@@ -147,17 +178,19 @@ fn remove_destroyed_tiles(
     // Rebuild tilemap collider
     let tile_colliders = build_terrain_colliders(&config, &tile_storage);
 
-    let mut tilemap_commands = commands
-        .entity(tilemap_entity);
+    let mut tilemap_commands = commands.entity(tilemap_entity);
 
     tilemap_commands.remove::<Collider>();
-    
+
     if !tile_colliders.is_empty() {
         tilemap_commands.insert(Collider::compound(tile_colliders));
     }
 }
 
-fn build_terrain_colliders(config: &TerrainConfig, tile_storage: &TileStorage) -> Vec<(Vec2, f32, Collider)> {
+fn build_terrain_colliders(
+    config: &TerrainConfig,
+    tile_storage: &TileStorage,
+) -> Vec<(Vec2, f32, Collider)> {
     let mut tile_colliders = vec![];
     let half_cell_size = config.cell_size / 2.;
     let tilemap_size = tile_storage.size;
@@ -185,12 +218,12 @@ impl Plugin for TerrainPlugin {
             .add_event::<TileDamageEvent>()
             .add_event::<TileDestroyedEvent>()
             .add_startup_system(setup_terrain)
-            .add_system(update_terrain.label(TerrainSet::Update))
-            .add_system(color_damage_tile.label(TerrainSet::Update))
+            .add_system(update_terrain.in_set(TerrainSet::Update))
+            .add_system(color_damage_tile.in_set(TerrainSet::Update))
             .add_system(
                 remove_destroyed_tiles
                     .after(TerrainSet::Update)
-                    .label(TerrainSet::Cleanup),
+                    .in_set(TerrainSet::Cleanup),
             );
     }
 }
