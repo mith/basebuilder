@@ -1,6 +1,5 @@
-use app_state::AppState;
-use app_state::AppStatePlugin;
-use basebuilder::BasebuilderPlugin;
+#[cfg(feature = "inspector")]
+use bevy::input::common_conditions::input_toggle_active;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::TilemapPlugin;
 #[cfg(feature = "inspector")]
@@ -9,12 +8,16 @@ use bevy_rapier2d::{
     prelude::{NoUserData, RapierPhysicsPlugin},
     render::RapierDebugRenderPlugin,
 };
+
+use app_state::AppStatePlugin;
+use basebuilder::BasebuilderPlugin;
 use cursor_position::CursorPositionPlugin;
 use dude::DudePlugin;
 use hovered_tile::HoveredTilePlugin;
 use load::LoadPlugin;
-use material::{MaterialPlugin, MaterialsState};
+use material::MaterialPlugin;
 use pan_zoom_camera2d::PanZoomCamera2dPlugin;
+use player_controller::PlayerControllerPlugin;
 use terrain::TerrainPlugin;
 
 mod app_state;
@@ -25,6 +28,7 @@ mod hovered_tile;
 mod load;
 mod material;
 mod pan_zoom_camera2d;
+mod player_controller;
 mod terrain;
 
 fn main() {
@@ -44,7 +48,9 @@ fn main() {
     .insert_resource(ClearColor(Color::BLACK));
 
     #[cfg(feature = "inspector")]
-    app.add_plugin(WorldInspectorPlugin::default());
+    app.add_plugin(
+        WorldInspectorPlugin::default().run_if(input_toggle_active(false, KeyCode::Escape)),
+    );
 
     // Add third-party plugins
     app.add_plugin(TilemapPlugin)
@@ -60,7 +66,8 @@ fn main() {
         .add_plugin(TerrainPlugin)
         .add_plugin(BasebuilderPlugin)
         .add_plugin(HoveredTilePlugin)
-        .add_plugin(DudePlugin);
+        .add_plugin(DudePlugin)
+        .add_plugin(PlayerControllerPlugin);
 
     app.run();
 }

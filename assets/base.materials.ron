@@ -5,6 +5,6 @@
     ),
     (
         name: "Dirt",
-        color: Rgba(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0),
+        color: Rgba(red: 0.2, green: 0.06, blue: 0.01, alpha: 1.0),
     )
 ])

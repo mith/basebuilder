@@ -3,68 +3,63 @@ use bevy_ecs_tilemap::tiles::TilePos;
 use bevy_rapier2d::prelude::{Collider, KinematicCharacterController, RigidBody};
 
 use crate::{
+    app_state::AppState,
     cursor_position::CursorPosition,
     hovered_tile::HoveredTile,
     terrain::{TerrainSet, TileDamageEvent, TileDestroyedEvent},
 };
 
 #[derive(Component)]
-pub struct Dude;
+pub(crate) struct Dude;
 
-fn setup(
+#[derive(Component, Default)]
+pub(crate) struct DudeInput {
+    pub(crate) move_direction: Option<Vec2>,
+    pub(crate) aim_direction: Option<f32>,
+}
+
+#[derive(Component)]
+struct AimingLaser;
+
+fn spawn_dude(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands.spawn((
-        Dude,
-        Name::new("Dude"),
-        MaterialMesh2dBundle {
-            transform: Transform::from_xyz(0., 53. * 16., 1.),
-            material: materials.add(Color::GRAY.into()),
-            mesh: meshes
-                .add(Mesh::from(shape::Quad::new(Vec2::new(12., 36.))))
-                .into(),
-            ..default()
-        },
-        RigidBody::KinematicPositionBased,
-        KinematicCharacterController::default(),
-        Collider::round_cuboid(5., 16.5, 0.1),
-    ));
-}
-
-fn move_dude_keyboard(
-    mut commands: Commands,
-    keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<(Entity, &mut KinematicCharacterController), With<Dude>>,
-) {
-    for (dude_entity, mut controller) in &mut query {
-        if keyboard_input.any_just_pressed([
-            KeyCode::Left,
-            KeyCode::Right,
-            KeyCode::Up,
-            KeyCode::Down,
-        ]) {
-            commands.entity(dude_entity).remove::<Target>();
-        }
-
-        if keyboard_input.pressed(KeyCode::Left) {
-            controller.translation = Some(Vec2::new(-1., 0.));
-        }
-        if keyboard_input.pressed(KeyCode::Right) {
-            controller.translation = Some(Vec2::new(1., 0.));
-        }
-        if keyboard_input.pressed(KeyCode::Up) {
-            controller.translation = Some(Vec2::new(0., 1.));
-        }
-        if keyboard_input.pressed(KeyCode::Down) {
-            controller.translation = Some(Vec2::new(0., -1.));
-        }
-    }
+    commands
+        .spawn((
+            Dude,
+            DudeInput::default(),
+            Name::new("Dude"),
+            MaterialMesh2dBundle {
+                transform: Transform::from_xyz(0., 16., 1.),
+                material: materials.add(Color::GRAY.into()),
+                mesh: meshes
+                    .add(Mesh::from(shape::Quad::new(Vec2::new(12., 36.))))
+                    .into(),
+                ..default()
+            },
+            RigidBody::KinematicPositionBased,
+            KinematicCharacterController::default(),
+            Collider::round_cuboid(5., 16.5, 0.1),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                AimingLaser,
+                MaterialMesh2dBundle {
+                    material: materials.add(Color::RED.into()),
+                    mesh: meshes
+                        .add(Mesh::from(shape::Quad::new(Vec2::new(100., 0.2))))
+                        .into(),
+                    transform: Transform::from_xyz(50., 0., 1.),
+                    ..default()
+                },
+            ));
+        });
 }
 
 #[derive(Component, Reflect)]
-struct Target {
+pub(crate) struct Target {
     entity: Option<Entity>,
     position: Vec2,
 }
@@ -79,6 +74,22 @@ struct Mining {
 enum DudeSet {
     Input,
     Action,
+}
+
+fn move_dude(
+    mut dude_query: Query<(&mut KinematicCharacterController, &DudeInput), With<Dude>>,
+    mut laser_query: Query<&mut Transform, With<AimingLaser>>,
+) {
+    for (mut controller, input) in &mut dude_query {
+        controller.translation = input.move_direction;
+
+        if let Some(aim_direction) = input.aim_direction {
+            let mut laser_transform = laser_query.single_mut();
+            let rotation = Quat::from_rotation_z(aim_direction);
+            laser_transform.rotation = rotation;
+            laser_transform.translation = rotation.mul_vec3(Vec3::new(50., 0., 0.));
+        }
+    }
 }
 
 fn move_dude_to_target(
@@ -167,8 +178,8 @@ impl Plugin for DudePlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Target>()
             .register_type::<Mining>()
-            .add_startup_system(setup)
-            .add_system(move_dude_keyboard.in_set(DudeSet::Input))
+            .add_system(spawn_dude.in_schedule(OnEnter(AppState::Game)))
+            .add_system(move_dude.in_set(DudeSet::Input))
             .add_system(pick_target.in_set(DudeSet::Input))
             .add_system(move_dude_to_target.after(DudeSet::Input))
             .add_system(dude_gravity.after(move_dude_to_target))

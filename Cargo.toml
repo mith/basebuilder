@@ -27,3 +27,4 @@ serde = "1.0.155"
 
 [patch.crates-io]
 bevy_ecs_tilemap = { git = 'https://github.com/geieredgar/bevy_ecs_tilemap', branch = "bevy_track" }
+bevy-inspector-egui = { git = 'https://github.com/jakobhellermann/bevy-inspector-egui' }

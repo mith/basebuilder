@@ -101,7 +101,7 @@ fn hovered_tile(
     }
 }
 
-const HIGHLIGHT_COLOR: Color = Color::rgb(1., 1., 0.2);
+const HIGHLIGHT_COLOR: Color = Color::rgba(1., 1., 0.2, 0.2);
 
 fn highlight_hovered_tile(
     mut commands: Commands,
