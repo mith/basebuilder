@@ -1,6 +1,7 @@
 use bevy::{math::Vec3Swizzles, prelude::*, sprite::Mesh2dHandle};
 use bevy_rapier2d::prelude::{
-    KinematicCharacterController, KinematicCharacterControllerOutput, QueryFilter, RapierContext, RayIntersection,
+    KinematicCharacterController, KinematicCharacterControllerOutput, QueryFilter, RapierContext,
+    RayIntersection,
 };
 
 #[derive(Component, Default)]
@@ -46,7 +47,7 @@ fn walk(
 }
 
 #[derive(Component)]
-pub(crate) struct AimingLaser;
+pub(crate) struct Hands;
 
 #[derive(Component, Default)]
 pub(crate) struct Aim {
@@ -61,28 +62,24 @@ pub(crate) struct AimingAt {
 
 fn aim(
     mut commands: Commands,
-    mut laser_query: Query<
-        (&mut Transform, &Mesh2dHandle, &Parent),
-        (With<AimingLaser>, Without<Aim>),
-    >,
+    mut hands_query: Query<(&mut Transform, &Parent), (With<Hands>, Without<Aim>)>,
     aimer_query: Query<(&Aim, &Transform, Entity)>,
     rapier_context: Res<RapierContext>,
-    mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    for (mut laser_transform, laser_mesh_handle, parent) in &mut laser_query {
-        let Ok((input, dude_transform, dude_entity)) = aimer_query.get(parent.get()) else {
+    for (mut hands_transform, parent) in &mut hands_query {
+        let Ok((input, player_transform, player_entity)) = aimer_query.get(parent.get()) else {
             continue;
         };
 
         if let Some(aim_direction) = input.aim_direction {
             let rotation = Quat::from_rotation_z(aim_direction);
-            laser_transform.rotation = rotation;
+            hands_transform.rotation = rotation;
 
             let max_distance = 1000.;
-            let filter = QueryFilter::default().exclude_collider(dude_entity);
+            let filter = QueryFilter::default().exclude_collider(player_entity);
             if let Some((hit_entity, intersection)) = rapier_context.cast_ray_and_get_normal(
-                dude_transform.translation.xy(),
-                laser_transform
+                player_transform.translation.xy(),
+                hands_transform
                     .rotation
                     .mul_vec3(Vec3::new(1., 0., 0.))
                     .xy(),
@@ -90,23 +87,13 @@ fn aim(
                 true,
                 filter,
             ) {
-                let toi = intersection.toi;
-                laser_transform.translation = rotation.mul_vec3(Vec3::new(toi / 2., 0., 1.));
-                if let Some(mesh) = meshes.get_mut(&laser_mesh_handle.0) {
-                    *mesh = Mesh::from(shape::Quad::new(Vec2::new(toi, 0.2)));
-                }
-                commands.entity(dude_entity).insert(AimingAt {
+                commands.entity(player_entity).insert(AimingAt {
                     target: hit_entity,
-                    intersection
+                    intersection,
                 });
             } else {
-                commands.entity(dude_entity).remove::<AimingAt>();
-                laser_transform.translation =
-                    rotation.mul_vec3(Vec3::new(max_distance / 2., 0., 1.));
-                if let Some(mesh) = meshes.get_mut(&laser_mesh_handle.0) {
-                    *mesh = Mesh::from(shape::Quad::new(Vec2::new(max_distance, 0.2)));
-                }
-            }
+                commands.entity(player_entity).remove::<AimingAt>();
+            };
         }
     }
 }

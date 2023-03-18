@@ -3,10 +3,10 @@ use bevy_rapier2d::prelude::{Collider, KinematicCharacterController, RigidBody};
 
 use crate::{
     ai_controller::{AiControlled, Target},
-    player::Player,
     gravity::Gravity,
     health::Health,
     movement::Walker,
+    player::Player,
 };
 
 #[derive(Component)]

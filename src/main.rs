@@ -1,42 +1,42 @@
 use ai_controller::AiControllerPlugin;
 use bevy::prelude::*;
 
-
-
 use app_state::AppStatePlugin;
 use bevy_ecs_tilemap::TilemapPlugin;
-use bevy_rapier2d::prelude::{RapierPhysicsPlugin, NoUserData};
+use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 use creep::CreepPlugin;
 use cursor_position::CursorPositionPlugin;
 use debug::DebugPlugin;
-use player::PlayerPlugin;
 use gravity::GravityPlugin;
+use gun::GunPlugin;
 use health::HealthPlugin;
+use hit::HitPlugin;
 use hovered_tile::HoveredTilePlugin;
 use load::LoadPlugin;
 use material::MaterialPlugin;
 use movement::MovementPlugin;
 use pan_zoom_camera2d::PanZoomCamera2dPlugin;
+use player::PlayerPlugin;
 use player_controller::PlayerControllerPlugin;
-use shoot::ShootPlugin;
 use terrain::TerrainPlugin;
 
 mod ai_controller;
 mod app_state;
 mod creep;
 mod cursor_position;
-mod player;
+mod debug;
 mod gravity;
+mod gun;
 mod health;
+mod hit;
 mod hovered_tile;
 mod load;
 mod material;
 mod movement;
 mod pan_zoom_camera2d;
+mod player;
 mod player_controller;
-mod shoot;
 mod terrain;
-mod debug;
 
 fn main() {
     let mut app = App::new();
@@ -74,7 +74,8 @@ fn main() {
         .add_plugin(GravityPlugin)
         .add_plugin(HealthPlugin)
         .add_plugin(MovementPlugin)
-        .add_plugin(ShootPlugin);
+        .add_plugin(GunPlugin)
+        .add_plugin(HitPlugin);
 
     app.run();
 }

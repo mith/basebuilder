@@ -4,9 +4,9 @@ use bevy_rapier2d::prelude::{Collider, KinematicCharacterController, RigidBody};
 use crate::{
     app_state::AppState,
     gravity::Gravity,
-    movement::{Aim, AimingLaser, Jumper, Walker},
+    gun::{Gun, Muzzle},
+    movement::{Aim, Hands, Jumper, Walker},
     player_controller::PlayerControlled,
-    shoot::Shooter,
 };
 
 #[derive(Component)]
@@ -23,7 +23,6 @@ fn spawn_player(
             Walker::default(),
             Jumper::default(),
             Aim::default(),
-            Shooter::default(),
             PlayerControlled,
             Name::new("Player"),
             MaterialMesh2dBundle {
@@ -40,17 +39,19 @@ fn spawn_player(
             Gravity,
         ))
         .with_children(|parent| {
-            parent.spawn((
-                AimingLaser,
-                MaterialMesh2dBundle {
-                    material: materials.add(Color::RED.into()),
-                    mesh: meshes
-                        .add(Mesh::from(shape::Quad::new(Vec2::new(1., 0.2))))
-                        .into(),
-                    transform: Transform::from_xyz(50., 0., 1.),
-                    ..default()
-                },
-            ));
+            parent
+                .spawn((
+                    Hands,
+                    Name::new("Hands"),
+                    TransformBundle {
+                        local: Transform::from_xyz(0., 5., 1.),
+                        ..default()
+                    },
+                    VisibilityBundle::default(),
+                ))
+                .with_children(|hands| {
+                    spawn_gun(hands, materials, meshes);
+                });
             parent.spawn(Camera2dBundle {
                 projection: OrthographicProjection {
                     scale: 0.4,
@@ -60,6 +61,37 @@ fn spawn_player(
             });
         });
 }
+
+fn spawn_gun(
+    hands: &mut ChildBuilder,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let gun_size = 15.;
+    hands
+        .spawn((
+            Gun::default(),
+            Name::new("Gun"),
+            MaterialMesh2dBundle {
+                material: materials.add(Color::DARK_GRAY.into()),
+                transform: Transform::from_xyz(gun_size * 0.5, 0., 1.),
+                mesh: meshes
+                    .add(Mesh::from(shape::Quad::new(Vec2::new(gun_size, 4.0))))
+                    .into(),
+                ..default()
+            },
+        ))
+        .with_children(|gun| {
+            gun.spawn((
+                Muzzle,
+                TransformBundle {
+                    local: Transform::from_xyz(gun_size * 0.5, 0., 1.),
+                    ..default()
+                },
+            ));
+        });
+}
+
 pub(crate) struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {

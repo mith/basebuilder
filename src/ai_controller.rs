@@ -1,6 +1,6 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 
-use crate::movement::{Walker, MovementSet};
+use crate::movement::{MovementSet, Walker};
 
 #[derive(Component)]
 pub(crate) struct AiControlled;
