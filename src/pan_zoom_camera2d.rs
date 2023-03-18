@@ -55,7 +55,8 @@ fn camera_zoom(
 
             // Move the camera toward the cursor position to keep the current object
             // underneath it.
-            let from_center = cursor_position - Vec2::new(primary_window.width() / 2., primary_window.height() / 2.);
+            let from_center = cursor_position
+                - Vec2::new(primary_window.width() / 2., primary_window.height() / 2.);
 
             let scaled_move = from_center * event.y * zoom_change.abs();
             transform.translation += Vec3::new(scaled_move.x, scaled_move.y, 0.);
@@ -114,6 +115,6 @@ pub struct PanZoomCamera2dPlugin;
 
 impl Plugin for PanZoomCamera2dPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(camera_zoom).add_system(drag_camera);
+        app.add_systems((camera_zoom, drag_camera));
     }
 }

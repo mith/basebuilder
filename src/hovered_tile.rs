@@ -141,6 +141,9 @@ fn unhighlight_hovered_tile(
     }
 }
 
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub(crate) struct HoveredTileSet;
+
 pub(crate) struct HoveredTilePlugin;
 
 impl Plugin for HoveredTilePlugin {
@@ -154,7 +157,8 @@ impl Plugin for HoveredTilePlugin {
                     unhighlight_hovered_tile,
                 )
                     .chain()
-                    .in_set(OnUpdate(AppState::Game)),
+                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(HoveredTileSet),
             );
     }
 }

@@ -36,11 +36,14 @@ fn update_cursor_pos(
     }
 }
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct CursorPositionSet;
+
 pub(crate) struct CursorPositionPlugin;
 
 impl Plugin for CursorPositionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(CursorPosition(Vec3::ZERO))
-            .add_system(update_cursor_pos);
+            .add_system(update_cursor_pos.in_set(CursorPositionSet));
     }
 }

@@ -3,7 +3,7 @@ use bevy_ecs_tilemap::prelude::*;
 use bevy_rapier2d::prelude::{Collider, RigidBody, Vect};
 use ndarray::prelude::*;
 
-use crate::{material::MaterialProperties, app_state::AppState};
+use crate::{app_state::AppState, material::MaterialProperties};
 
 #[derive(Resource)]
 pub(crate) struct TerrainConfig {
@@ -28,10 +28,7 @@ pub(crate) struct Terrain {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) enum TerrainSet {
-    Update,
-    Cleanup,
-}
+pub(crate) struct TerrainSet;
 
 fn setup_terrain(
     mut commands: Commands,
@@ -80,8 +77,7 @@ fn setup_terrain(
                     y: origin.y + y,
                 };
 
-                let texture_index =
-                    TileTextureIndex(0);
+                let texture_index = TileTextureIndex(0);
                 let tile_entity = commands
                     .spawn(TileBundle {
                         position: tile_pos,
@@ -223,13 +219,14 @@ impl Plugin for TerrainPlugin {
             .add_event::<TileDamageEvent>()
             .add_event::<TileDestroyedEvent>()
             .add_system(setup_terrain.in_schedule(OnEnter(AppState::Game)))
-            .add_system(update_terrain.in_set(OnUpdate(AppState::Game)).in_set(TerrainSet::Update))
-            .add_system(color_damage_tile.in_set(OnUpdate(AppState::Game)).in_set(TerrainSet::Update))
-            .add_system(
-                remove_destroyed_tiles
-                    .after(TerrainSet::Update)
+            .add_systems(
+                (
+                    update_terrain,
+                    color_damage_tile.after(update_terrain),
+                    remove_destroyed_tiles.after(update_terrain),
+                )
                     .in_set(OnUpdate(AppState::Game))
-                    .in_set(TerrainSet::Cleanup),
+                    .in_set(TerrainSet),
             );
     }
 }

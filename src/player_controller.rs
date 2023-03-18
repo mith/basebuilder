@@ -2,53 +2,66 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 
 use crate::{
     cursor_position::CursorPosition,
-    dude::{Dude, DudeInput},
+    movement::{Aim, Jumper, MovementSet, Walker},
+    shoot::Shooter,
 };
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 struct PlayerControllerSet;
 
+#[derive(Component)]
+pub(crate) struct PlayerControlled;
+
 fn keyboard_input(
     keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<&mut DudeInput, With<Dude>>,
+    mut query: Query<(&mut Walker, Option<&mut Jumper>), With<PlayerControlled>>,
 ) {
-    for mut dude_input in &mut query {
-        if !keyboard_input.any_pressed([KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down])
-        {
+    for (mut dude_input, mut maybe_jumper) in &mut query {
+        if !keyboard_input.any_pressed([KeyCode::Left, KeyCode::Right, KeyCode::A, KeyCode::E]) {
             dude_input.move_direction = None;
         } else {
             let mut direction = Vec2::ZERO;
-            if keyboard_input.pressed(KeyCode::Left) {
+            if keyboard_input.pressed(KeyCode::Left) || keyboard_input.pressed(KeyCode::A) {
                 direction += Vec2::new(-1., 0.);
             }
-            if keyboard_input.pressed(KeyCode::Right) {
+            if keyboard_input.pressed(KeyCode::Right) || keyboard_input.pressed(KeyCode::E) {
                 direction += Vec2::new(1., 0.);
             }
-            if keyboard_input.pressed(KeyCode::Up) {
-                direction += Vec2::new(0., 1.);
-            }
-            if keyboard_input.pressed(KeyCode::Down) {
-                direction += Vec2::new(0., -1.);
-            }
+
             dude_input.move_direction = Some(direction.normalize());
+        }
+
+        if let Some(jumper) = maybe_jumper.as_mut() {
+            jumper.jump = keyboard_input.just_pressed(KeyCode::Space);
         }
     }
 }
 
 fn mouse_input(
     cursor_position: Res<CursorPosition>,
-    mut query: Query<(&mut DudeInput, &GlobalTransform), With<Dude>>,
+    mouse_button_input: Res<Input<MouseButton>>,
+    mut query: Query<(&mut Aim, Option<&mut Shooter>, &GlobalTransform), With<PlayerControlled>>,
 ) {
-    for (mut dude_input, dude_transform) in &mut query {
+    for (mut aim, mut shooter, dude_transform) in &mut query {
         // calculate angle between cursor and dude
         let angle = angle_between_dude_and_position(&cursor_position, dude_transform);
-        dude_input.aim_direction = Some(angle);
+        aim.aim_direction = Some(angle);
+
+        if let Some(shooter) = shooter.as_mut() {
+            if mouse_button_input.pressed(MouseButton::Left) {
+                shooter.shoot = true;
+            } else {
+                shooter.shoot = false;
+            }
+        }
     }
 }
 
-fn angle_between_dude_and_position(cursor_position: &CursorPosition, dude_transform: &GlobalTransform) -> f32 {
-    let direction =
-        (cursor_position.0.xy() - dude_transform.translation().truncate()).normalize();
+fn angle_between_dude_and_position(
+    cursor_position: &CursorPosition,
+    dude_transform: &GlobalTransform,
+) -> f32 {
+    let direction = (cursor_position.0.xy() - dude_transform.translation().truncate()).normalize();
     let angle = Vec2::new(1., 0.).angle_between(direction);
 
     if angle < 0. {
@@ -62,8 +75,11 @@ pub(crate) struct PlayerControllerPlugin;
 
 impl Plugin for PlayerControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(keyboard_input.in_set(PlayerControllerSet))
-            .add_system(mouse_input.in_set(PlayerControllerSet));
+        app.add_systems(
+            (keyboard_input, mouse_input)
+                .in_set(PlayerControllerSet)
+                .before(MovementSet),
+        );
     }
 }
 
