@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 
 use crate::{
@@ -21,51 +23,69 @@ pub(crate) struct MuzzleFlash {
 
 fn fire(
     mut commands: Commands,
-    shooter_query: Query<(&AimingAt, Entity)>,
-    children_query: Query<&Children>,
-    mut gun_query: Query<(&mut Gun, &Children)>,
+    shooter_query: Query<&AimingAt>,
+    parents_query: Query<&Parent>,
+    mut gun_query: Query<(Entity, &mut Gun, &Children)>,
     muzzle_query: Query<&GlobalTransform, With<Muzzle>>,
     mut hit_events: EventWriter<HitEvent>,
     time: Res<Time>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    for (aiming_at, shooter_entity) in &shooter_query {
-        for descendant in children_query.iter_descendants(shooter_entity) {
-            if let Ok((gun, gun_children)) = gun_query.get_mut(descendant).as_mut() {
-                if let Some(reload_timer) = gun.reload_timer.as_mut() {
-                    if reload_timer.tick(time.delta()).just_finished() {
-                        gun.reload_timer = None;
-                    }
-                } else if gun.fire {
-                    gun.reload_timer = Some(Timer::from_seconds(0.2, TimerMode::Once));
-                    hit_events.send(HitEvent {
-                        entity: aiming_at.target,
-                        intersection: aiming_at.intersection,
-                        damage: 25,
-                    });
-
-                    // spawn muzzle flash
-                    let muzzle_global_transform = muzzle_query.get(gun_children[0]).unwrap();
-                    commands.spawn((
-                        MaterialMesh2dBundle {
-                            material: materials.add(Color::rgb(1., 0.5, 0.).into()),
-                            transform: Transform::from_translation(
-                                muzzle_global_transform.translation(),
-                            ),
-                            mesh: meshes
-                                .add(Mesh::from(shape::Quad::new(Vec2::new(2., 2.))))
-                                .into(),
-                            ..Default::default()
-                        },
-                        MuzzleFlash {
-                            life_timer: Timer::from_seconds(0.1, TimerMode::Once),
-                        },
-                    ));
-                }
+    for (gun_entity, mut gun, gun_children) in &mut gun_query {
+        if let Some(reload_timer) = gun.reload_timer.as_mut() {
+            if reload_timer.tick(time.delta()).just_finished() {
+                gun.reload_timer = None;
             }
+        } else if gun.fire {
+            gun.reload_timer = Some(Timer::from_seconds(0.2, TimerMode::Once));
+
+            let maybe_shooter = parents_query
+                .iter_ancestors(gun_entity)
+                .find_map(|ancestor| shooter_query.get(ancestor).ok());
+            if let Some(aiming_at) = maybe_shooter
+            {
+                hit_events.send(HitEvent {
+                    entity: aiming_at.target,
+                    intersection: aiming_at.intersection,
+                    damage: 25,
+                });
+            }
+
+            spawn_muzzle_flash(
+                &muzzle_query,
+                gun_children,
+                &mut commands,
+                &mut materials,
+                &mut meshes,
+            );
         }
     }
+}
+
+fn spawn_muzzle_flash(
+    muzzle_query: &Query<&GlobalTransform, With<Muzzle>>,
+    gun_children: &Children,
+    commands: &mut Commands,
+    materials: &mut Assets<ColorMaterial>,
+    meshes: &mut Assets<Mesh>,
+) {
+    let muzzle_global_transform = muzzle_query.get(gun_children[0]).unwrap();
+    commands.spawn((
+        MaterialMesh2dBundle {
+            material: materials.add(Color::rgb(1., 0.5, 0.).into()),
+            transform: muzzle_global_transform
+                .mul_transform(Transform::from_rotation(Quat::from_rotation_z(-PI * 0.5)))
+                .compute_transform(),
+            mesh: meshes
+                .add(Mesh::from(shape::RegularPolygon::new(2., 3)))
+                .into(),
+            ..Default::default()
+        },
+        MuzzleFlash {
+            life_timer: Timer::from_seconds(0.05, TimerMode::Once),
+        },
+    ));
 }
 
 fn muzzle_flash(

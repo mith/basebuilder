@@ -14,7 +14,7 @@ pub(crate) struct Wound;
 
 #[derive(Component)]
 pub(crate) struct BloodParticle {
-    pub(crate) lifetime: f32,
+    pub(crate) life_timer: Timer,
 }
 
 fn hits(
@@ -36,7 +36,9 @@ fn hits(
             // spawn blood particle
             let particle_size = 1.;
             commands.spawn((
-                BloodParticle { lifetime: 0.5 },
+                BloodParticle {
+                    life_timer: Timer::from_seconds(0.5, TimerMode::Once),
+                },
                 MaterialMesh2dBundle {
                     transform: Transform::from_xyz(
                         hit_event.intersection.point.x,
@@ -92,8 +94,7 @@ fn blood_particles(
     time: Res<Time>,
 ) {
     for (entity, mut blood_particle) in &mut query {
-        blood_particle.lifetime -= time.delta_seconds();
-        if blood_particle.lifetime <= 0. {
+        if blood_particle.life_timer.tick(time.delta()).just_finished() {
             commands.entity(entity).despawn_recursive();
         }
     }
