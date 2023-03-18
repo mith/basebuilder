@@ -9,22 +9,23 @@ use crate::{
     shoot::Shooter,
 };
 
-#[derive(Component, Default)]
-pub(crate) struct Dude;
-fn spawn_dude(
+#[derive(Component)]
+pub(crate) struct Player;
+
+fn spawn_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands
         .spawn((
-            Dude::default(),
+            Player,
             Walker::default(),
             Jumper::default(),
             Aim::default(),
             Shooter::default(),
             PlayerControlled,
-            Name::new("Dude"),
+            Name::new("Player"),
             MaterialMesh2dBundle {
                 transform: Transform::from_xyz(0., 16., 0.),
                 material: materials.add(Color::GRAY.into()),
@@ -59,10 +60,10 @@ fn spawn_dude(
             });
         });
 }
-pub(crate) struct DudePlugin;
+pub(crate) struct PlayerPlugin;
 
-impl Plugin for DudePlugin {
+impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(spawn_dude.in_schedule(OnEnter(AppState::Game)));
+        app.add_system(spawn_player.in_schedule(OnEnter(AppState::Game)));
     }
 }

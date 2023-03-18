@@ -1,19 +1,15 @@
 use ai_controller::AiControllerPlugin;
-#[cfg(feature = "inspector")]
-use bevy::input::common_conditions::input_toggle_active;
 use bevy::prelude::*;
-use bevy_ecs_tilemap::TilemapPlugin;
-#[cfg(feature = "inspector")]
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_rapier2d::{
-    prelude::{NoUserData, RapierPhysicsPlugin},
-    render::RapierDebugRenderPlugin,
-};
+
+
 
 use app_state::AppStatePlugin;
+use bevy_ecs_tilemap::TilemapPlugin;
+use bevy_rapier2d::prelude::{RapierPhysicsPlugin, NoUserData};
 use creep::CreepPlugin;
 use cursor_position::CursorPositionPlugin;
-use dude::DudePlugin;
+use debug::DebugPlugin;
+use player::PlayerPlugin;
 use gravity::GravityPlugin;
 use health::HealthPlugin;
 use hovered_tile::HoveredTilePlugin;
@@ -29,7 +25,7 @@ mod ai_controller;
 mod app_state;
 mod creep;
 mod cursor_position;
-mod dude;
+mod player;
 mod gravity;
 mod health;
 mod hovered_tile;
@@ -40,6 +36,7 @@ mod pan_zoom_camera2d;
 mod player_controller;
 mod shoot;
 mod terrain;
+mod debug;
 
 fn main() {
     let mut app = App::new();
@@ -57,27 +54,21 @@ fn main() {
                 .set(ImagePlugin::default_nearest()),
         )
         .insert_resource(ClearColor(Color::BLACK));
-
-    #[cfg(feature = "inspector")]
-    app.add_plugin(
-        WorldInspectorPlugin::default().run_if(input_toggle_active(false, KeyCode::Escape)),
-    );
-
     // Add third-party plugins
     app.add_plugin(TilemapPlugin)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.))
-        .add_plugin(RapierDebugRenderPlugin::default());
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.));
 
     // Add crate plugins
     app.add_plugin(AppStatePlugin)
         .add_plugin(LoadPlugin)
+        .add_plugin(DebugPlugin)
         .add_plugin(CursorPositionPlugin)
         .add_plugin(PanZoomCamera2dPlugin)
         .add_plugin(MaterialPlugin)
         .add_plugin(TerrainPlugin)
         .add_plugin(CreepPlugin)
         .add_plugin(HoveredTilePlugin)
-        .add_plugin(DudePlugin)
+        .add_plugin(PlayerPlugin)
         .add_plugin(PlayerControllerPlugin)
         .add_plugin(AiControllerPlugin)
         .add_plugin(GravityPlugin)

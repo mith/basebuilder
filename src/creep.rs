@@ -3,7 +3,7 @@ use bevy_rapier2d::prelude::{Collider, KinematicCharacterController, RigidBody};
 
 use crate::{
     ai_controller::{AiControlled, Target},
-    dude::Dude,
+    player::Player,
     gravity::Gravity,
     health::Health,
     movement::Walker,
@@ -25,7 +25,7 @@ fn spawn_creep(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    dude_query: Query<(Entity, &Transform), With<Dude>>,
+    dude_query: Query<(Entity, &Transform), With<Player>>,
     mut timer: ResMut<CreepSpawnTimer>,
     time: Res<Time>,
 ) {

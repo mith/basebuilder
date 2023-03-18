@@ -24,7 +24,7 @@ fn update_health(
 fn despawn_dead_entities(mut commands: Commands, mut health_query: Query<(Entity, &Health)>) {
     for (entity, health) in &mut health_query {
         if health.value == 0 {
-            commands.entity(entity).despawn();
+            commands.entity(entity).despawn_recursive();
         }
     }
 }

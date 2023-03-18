@@ -1,6 +1,6 @@
 use bevy::{math::Vec3Swizzles, prelude::*, sprite::Mesh2dHandle};
 use bevy_rapier2d::prelude::{
-    KinematicCharacterController, KinematicCharacterControllerOutput, QueryFilter, RapierContext,
+    KinematicCharacterController, KinematicCharacterControllerOutput, QueryFilter, RapierContext, RayIntersection,
 };
 
 #[derive(Component, Default)]
@@ -54,7 +54,10 @@ pub(crate) struct Aim {
 }
 
 #[derive(Component)]
-pub(crate) struct AimingAt(pub(crate) Entity);
+pub(crate) struct AimingAt {
+    pub(crate) target: Entity,
+    pub(crate) intersection: RayIntersection,
+}
 
 fn aim(
     mut commands: Commands,
@@ -77,7 +80,7 @@ fn aim(
 
             let max_distance = 1000.;
             let filter = QueryFilter::default().exclude_collider(dude_entity);
-            if let Some((hit_entity, toi)) = rapier_context.cast_ray(
+            if let Some((hit_entity, intersection)) = rapier_context.cast_ray_and_get_normal(
                 dude_transform.translation.xy(),
                 laser_transform
                     .rotation
@@ -87,11 +90,15 @@ fn aim(
                 true,
                 filter,
             ) {
+                let toi = intersection.toi;
                 laser_transform.translation = rotation.mul_vec3(Vec3::new(toi / 2., 0., 1.));
                 if let Some(mesh) = meshes.get_mut(&laser_mesh_handle.0) {
                     *mesh = Mesh::from(shape::Quad::new(Vec2::new(toi, 0.2)));
                 }
-                commands.entity(dude_entity).insert(AimingAt(hit_entity));
+                commands.entity(dude_entity).insert(AimingAt {
+                    target: hit_entity,
+                    intersection
+                });
             } else {
                 commands.entity(dude_entity).remove::<AimingAt>();
                 laser_transform.translation =
