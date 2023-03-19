@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::{app_state::AppState, material::MaterialsState, terrain_settings::TerrainSettingsState};
+use crate::{
+    app_state::AppState, material::MaterialsState, terrain_settings::TerrainSettingsState, items::ItemsState,
+};
 
 pub(crate) struct LoadPlugin;
 
@@ -14,7 +16,8 @@ impl Plugin for LoadPlugin {
             start_game
                 .run_if(in_state(AppState::Loading))
                 .run_if(in_state(MaterialsState::Loaded))
-                .run_if(in_state(TerrainSettingsState::Loaded)),
+                .run_if(in_state(TerrainSettingsState::Loaded))
+                .run_if(in_state(ItemsState::Loaded)),
         );
     }
 }

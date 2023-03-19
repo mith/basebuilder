@@ -12,6 +12,7 @@ use gun::GunPlugin;
 use health::HealthPlugin;
 use hit::HitPlugin;
 use hovered_tile::HoveredTilePlugin;
+use items::ItemsPlugin;
 use load::LoadPlugin;
 use material::MaterialPlugin;
 use movement::MovementPlugin;
@@ -39,6 +40,7 @@ mod player;
 mod player_controller;
 mod terrain;
 mod terrain_settings;
+mod items;
 
 fn main() {
     let mut app = App::new();
@@ -67,6 +69,7 @@ fn main() {
         .add_plugin(CursorPositionPlugin)
         .add_plugin(PanZoomCamera2dPlugin)
         .add_plugin(MaterialPlugin)
+        .add_plugin(ItemsPlugin)
         .add_plugin(TerrainSettingsPlugin)
         .add_plugin(TerrainPlugin)
         .add_plugin(CreepPlugin)
