@@ -3,6 +3,7 @@ use bevy_rapier2d::prelude::{Collider, KinematicCharacterController, RigidBody};
 
 use crate::{
     ai_controller::{AiControlled, Target},
+    app_state::AppState,
     gravity::Gravity,
     health::Health,
     movement::Walker,
@@ -64,7 +65,10 @@ pub(crate) struct CreepPlugin;
 
 impl Plugin for CreepPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CreepSpawnTimer>()
-            .add_system(spawn_creep.in_set(CreepSet));
+        app.init_resource::<CreepSpawnTimer>().add_system(
+            spawn_creep
+                .in_schedule(OnEnter(AppState::Game))
+                .in_set(CreepSet),
+        );
     }
 }

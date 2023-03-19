@@ -19,6 +19,7 @@ use pan_zoom_camera2d::PanZoomCamera2dPlugin;
 use player::PlayerPlugin;
 use player_controller::PlayerControllerPlugin;
 use terrain::TerrainPlugin;
+use terrain_settings::TerrainSettingsPlugin;
 
 mod ai_controller;
 mod app_state;
@@ -37,6 +38,7 @@ mod pan_zoom_camera2d;
 mod player;
 mod player_controller;
 mod terrain;
+mod terrain_settings;
 
 fn main() {
     let mut app = App::new();
@@ -65,6 +67,7 @@ fn main() {
         .add_plugin(CursorPositionPlugin)
         .add_plugin(PanZoomCamera2dPlugin)
         .add_plugin(MaterialPlugin)
+        .add_plugin(TerrainSettingsPlugin)
         .add_plugin(TerrainPlugin)
         .add_plugin(CreepPlugin)
         .add_plugin(HoveredTilePlugin)

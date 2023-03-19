@@ -1,26 +1,16 @@
+use std::hash::{BuildHasher, Hasher};
+
+use ahash::{AHasher, RandomState};
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_rapier2d::prelude::{Collider, RigidBody, Vect};
+use fast_poisson::Poisson2D;
 use ndarray::prelude::*;
+use noise::{NoiseFn, ScalePoint, Seedable, SuperSimplex, Turbulence};
+use rand::{seq::SliceRandom, SeedableRng};
+use rand_xoshiro::Xoshiro256StarStar;
 
-use crate::{app_state::AppState, material::MaterialProperties};
-
-#[derive(Resource)]
-pub(crate) struct TerrainConfig {
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) cell_size: f32,
-}
-
-impl Default for TerrainConfig {
-    fn default() -> Self {
-        Self {
-            width: 100,
-            height: 100,
-            cell_size: 16.,
-        }
-    }
-}
+use crate::{app_state::AppState, material::MaterialProperties, terrain_settings::TerrainSettings};
 
 #[derive(Component)]
 pub(crate) struct Terrain {
@@ -30,10 +20,102 @@ pub(crate) struct Terrain {
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct TerrainSet;
 
+#[derive(Debug)]
+struct RadiusNoise {
+    location: [f64; 2],
+    radius: f64,
+}
+
+impl NoiseFn<f64, 2> for RadiusNoise {
+    /// Return 1. if the point is within the radius, 0. otherwise
+    fn get(&self, point: [f64; 2]) -> f64 {
+        let dist = (point[0] - self.location[0]).powi(2) + (point[1] - self.location[1]).powi(2);
+        if dist < self.radius.powi(2) {
+            1.
+        } else {
+            0.
+        }
+    }
+}
+
+fn generate_terrain(seed: u32, terrain_settings: &TerrainSettings) -> Array2<u16> {
+    let mut terrain = Array2::from_elem((100, 100), 0u16);
+
+    let useed = seed as u64;
+    let mut hasher: AHasher = RandomState::with_seeds(
+        useed,
+        useed.swap_bytes(),
+        useed.count_ones() as u64,
+        useed.rotate_left(32),
+    )
+    .build_hasher();
+    let ore_seed = hasher.finish();
+
+    let ore_locations = Poisson2D::new()
+        .with_dimensions([100., 100.], 10.)
+        .with_seed(ore_seed)
+        .iter()
+        .take(50)
+        .collect::<Vec<_>>();
+
+    let ore_noise = ore_locations.iter().map(|&point| RadiusNoise {
+        location: point,
+        radius: 5.,
+    });
+
+    let mut rng = Xoshiro256StarStar::seed_from_u64(ore_seed);
+    let ore_types: Vec<(u16, _)> = ore_locations
+        .iter()
+        .map(|_| {
+            let ore_types = terrain_settings.ore_incidences.iter().map(|(ore, inc)| {
+                (*ore, *inc)
+            }).collect::<Vec<_>>();
+
+            let ore_type = ore_types
+                .choose_weighted(&mut rng, |item| item.1)
+                .unwrap()
+                .0;
+            ore_type
+        })
+        .zip(ore_noise)
+        .collect::<Vec<_>>();
+
+    for x in 0..100 {
+        for y in 0..50 {
+            let simplex = SuperSimplex::new(seed);
+            let scale_point = ScalePoint::new(simplex).set_scale(0.1).set_x_scale(0.);
+            let turbulence = Turbulence::<_, SuperSimplex>::new(scale_point)
+                .set_seed(seed + 1)
+                .set_frequency(0.001)
+                .set_power(10.);
+            let noise = turbulence.get([x as f64, y as f64]);
+
+            let ore_type = ore_types.iter().fold(None, |acc, (ore_type, noise)| {
+                if noise.get([x as f64, y as f64]) > 0. {
+                    Some(ore_type)
+                } else {
+                    acc
+                }
+            });
+            terrain[[x, y]] = if noise > 0. {
+                if let Some(ore) = ore_type {
+                    *ore
+                } else {
+                    1
+                }
+            } else {
+                0
+            };
+        }
+    }
+
+    terrain
+}
+
 fn setup_terrain(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    config: Res<TerrainConfig>,
+    config: Res<TerrainSettings>,
     material_properties: Res<MaterialProperties>,
 ) {
     let texture_handle = asset_server.load("textures/terrain.png");
@@ -44,7 +126,7 @@ fn setup_terrain(
     };
 
     // create materials array with bottom half of map made of dirt, upper half empty air
-    let materials = Array2::from_shape_fn((100, 100), |(_x, y)| if y < 50 { 1 } else { 0 });
+    let materials = generate_terrain(2, &config);
 
     let mut tile_storage = TileStorage::empty(tilemap_size);
     let tilemap_entity = commands
@@ -162,7 +244,7 @@ pub(crate) struct TileDestroyedEvent(pub(crate) Entity);
 
 fn remove_destroyed_tiles(
     mut commands: Commands,
-    config: Res<TerrainConfig>,
+    config: Res<TerrainSettings>,
     tile_query: Query<(Entity, &TileHealth, &TilePos)>,
     mut tilemap_query: Query<(Entity, &mut TileStorage), With<Terrain>>,
     mut destroyed_tiles: EventWriter<TileDestroyedEvent>,
@@ -189,7 +271,7 @@ fn remove_destroyed_tiles(
 }
 
 fn build_terrain_colliders(
-    config: &TerrainConfig,
+    config: &TerrainSettings,
     tile_storage: &TileStorage,
 ) -> Vec<(Vec2, f32, Collider)> {
     let mut tile_colliders = vec![];
@@ -215,8 +297,7 @@ pub(crate) struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<TerrainConfig>()
-            .add_event::<TileDamageEvent>()
+        app.add_event::<TileDamageEvent>()
             .add_event::<TileDestroyedEvent>()
             .add_system(setup_terrain.in_schedule(OnEnter(AppState::Game)))
             .add_systems(

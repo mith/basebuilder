@@ -8,7 +8,7 @@ use bevy_ecs_tilemap::{
 use crate::{
     app_state::AppState,
     cursor_position::CursorPosition,
-    terrain::{Terrain, TerrainConfig},
+    terrain::{Terrain}, terrain_settings::TerrainSettings,
 };
 
 #[derive(Component)]
@@ -16,7 +16,7 @@ struct HoverLayer;
 
 fn setup_hovered_layer(
     mut commands: Commands,
-    config: Res<TerrainConfig>,
+    config: Res<TerrainSettings>,
 
     asset_server: Res<AssetServer>,
 ) {
