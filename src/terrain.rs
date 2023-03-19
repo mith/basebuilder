@@ -55,7 +55,6 @@ fn generate_terrain(seed: u32, terrain_settings: &TerrainSettings) -> Array2<u16
         .with_dimensions([100., 100.], 10.)
         .with_seed(ore_seed)
         .iter()
-        .take(50)
         .collect::<Vec<_>>();
 
     let ore_noise = ore_locations.iter().map(|&point| RadiusNoise {
