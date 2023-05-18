@@ -6,9 +6,8 @@ use bevy_ecs_tilemap::{
 };
 
 use crate::{
-    app_state::AppState,
-    cursor_position::CursorPosition,
-    terrain::{Terrain}, terrain_settings::TerrainSettings,
+    app_state::AppState, cursor_position::CursorPosition, terrain::Terrain,
+    terrain_settings::TerrainSettings,
 };
 
 #[derive(Component)]
@@ -74,29 +73,29 @@ fn hovered_tile(
     >,
 ) {
     let cursor_pos = cursor_pos.0;
-    let (chunk_transform, tile_storage, chunk_size, grid_size, map_type) =
-        &terrain_tilemap_query.single();
-    let cursor_in_chunk_pos: Vec2 = {
-        // Extend the cursor_pos vec3 by 1.0
-        let cursor_pos = Vec4::from((cursor_pos, 1.));
-        let cursor_in_chunk_pos = chunk_transform.compute_matrix().inverse() * cursor_pos;
-        cursor_in_chunk_pos.xy()
-    };
+    for (chunk_transform, tile_storage, chunk_size, grid_size, map_type) in &terrain_tilemap_query {
+        let cursor_in_chunk_pos: Vec2 = {
+            // Extend the cursor_pos vec3 by 1.0
+            let cursor_pos = Vec4::from((cursor_pos, 1.));
+            let cursor_in_chunk_pos = chunk_transform.compute_matrix().inverse() * cursor_pos;
+            cursor_in_chunk_pos.xy()
+        };
 
-    if let Some(tile_entity) =
-        TilePos::from_world_pos(&cursor_in_chunk_pos, chunk_size, grid_size, map_type)
-            .as_ref()
-            .and_then(|tile_pos| tile_storage.get(tile_pos))
-    {
-        commands.entity(tile_entity).insert(HoveredTile);
-        for hovered_tile in &mut hovered_tiles_query.iter() {
-            if hovered_tile != tile_entity {
+        if let Some(tile_entity) =
+            TilePos::from_world_pos(&cursor_in_chunk_pos, chunk_size, grid_size, map_type)
+                .as_ref()
+                .and_then(|tile_pos| tile_storage.get(tile_pos))
+        {
+            commands.entity(tile_entity).insert(HoveredTile);
+            for hovered_tile in &mut hovered_tiles_query.iter() {
+                if hovered_tile != tile_entity {
+                    commands.entity(hovered_tile).remove::<HoveredTile>();
+                }
+            }
+        } else {
+            for hovered_tile in &mut hovered_tiles_query.iter() {
                 commands.entity(hovered_tile).remove::<HoveredTile>();
             }
-        }
-    } else {
-        for hovered_tile in &mut hovered_tiles_query.iter() {
-            commands.entity(hovered_tile).remove::<HoveredTile>();
         }
     }
 }

@@ -1,15 +1,34 @@
-
 use bevy::{prelude::*, reflect::TypeUuid};
 use bevy_common_assets::ron::RonAssetPlugin;
 
-#[derive(serde::Deserialize, Clone)]
-pub(crate) struct Item {
-    pub(crate) name: String,
-    pub(crate) color: Color,
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct U8Color {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Item {
+    pub name: String,
+    pub color: U8Color,
+}
+
+impl Item {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            color: U8Color { r: 0, g: 0, b: 0 },
+        }
+    }
+
+    pub fn color(&self) -> Color {
+        Color::rgb_u8(self.color.r, self.color.g, self.color.b)
+    }
 }
 
 #[derive(serde::Deserialize, TypeUuid)]
-#[uuid = "2a18e173-bc60-4aa2-a02b-a63d97622ab0"]
+#[uuid = "b0e5fa81-d40d-4792-bc09-4f8778a649a3"]
 struct Items(Vec<Item>);
 
 #[derive(Resource)]
@@ -21,10 +40,10 @@ fn load_items(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 #[derive(Resource)]
-pub(crate) struct ItemProperties(pub Vec<Item>);
+pub struct ItemProperties(pub Vec<Item>);
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub(crate) enum ItemsState {
+pub enum ItemsState {
     #[default]
     Loading,
     Loaded,
@@ -42,9 +61,9 @@ fn setup_items(
     }
 }
 
-pub(crate) struct ItemsPlugin;
+pub struct ItemPlugin;
 
-impl Plugin for ItemsPlugin {
+impl Plugin for ItemPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(RonAssetPlugin::<Items>::new(&["items.ron"]))
             .add_asset::<Items>()

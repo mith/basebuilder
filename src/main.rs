@@ -3,6 +3,7 @@ use bevy::prelude::*;
 
 use app_state::AppStatePlugin;
 use bevy_ecs_tilemap::TilemapPlugin;
+use bevy_proto::prelude::ProtoPlugin;
 use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 use creep::CreepPlugin;
 use cursor_position::CursorPositionPlugin;
@@ -12,13 +13,14 @@ use gun::GunPlugin;
 use health::HealthPlugin;
 use hit::HitPlugin;
 use hovered_tile::HoveredTilePlugin;
-use items::ItemsPlugin;
+use item::ItemPlugin;
 use load::LoadPlugin;
 use material::MaterialPlugin;
 use movement::MovementPlugin;
 use pan_zoom_camera2d::PanZoomCamera2dPlugin;
 use player::PlayerPlugin;
 use player_controller::PlayerControllerPlugin;
+use structure::StructurePlugin;
 use terrain::TerrainPlugin;
 use terrain_settings::TerrainSettingsPlugin;
 
@@ -32,6 +34,7 @@ mod gun;
 mod health;
 mod hit;
 mod hovered_tile;
+mod item;
 mod load;
 mod material;
 mod movement;
@@ -40,7 +43,10 @@ mod player;
 mod player_controller;
 mod terrain;
 mod terrain_settings;
-mod items;
+// mod ui;
+mod crafting;
+mod inventory;
+mod structure;
 
 fn main() {
     let mut app = App::new();
@@ -55,12 +61,17 @@ fn main() {
                     }),
                     ..default()
                 })
+                // .set(AssetPlugin {
+                //     watch_for_changes: true,
+                //     ..default()
+                // })
                 .set(ImagePlugin::default_nearest()),
         )
         .insert_resource(ClearColor(Color::BLACK));
     // Add third-party plugins
     app.add_plugin(TilemapPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.));
+    // .add_plugin(ProtoPlugin::new());
 
     // Add crate plugins
     app.add_plugin(AppStatePlugin)
@@ -69,19 +80,20 @@ fn main() {
         .add_plugin(CursorPositionPlugin)
         .add_plugin(PanZoomCamera2dPlugin)
         .add_plugin(MaterialPlugin)
-        .add_plugin(ItemsPlugin)
+        // .add_plugin(ItemPlugin)
         .add_plugin(TerrainSettingsPlugin)
         .add_plugin(TerrainPlugin)
         .add_plugin(CreepPlugin)
         .add_plugin(HoveredTilePlugin)
-        .add_plugin(PlayerPlugin)
-        .add_plugin(PlayerControllerPlugin)
+        // .add_plugin(PlayerPlugin)
+        // .add_plugin(PlayerControllerPlugin)
         .add_plugin(AiControllerPlugin)
         .add_plugin(GravityPlugin)
         .add_plugin(HealthPlugin)
         .add_plugin(MovementPlugin)
         .add_plugin(GunPlugin)
         .add_plugin(HitPlugin);
+    // .add_plugin(StructurePlugin);
 
     app.run();
 }

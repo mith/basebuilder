@@ -11,6 +11,10 @@ struct TerrainSettingsRaw {
     height: u32,
     cell_size: f32,
     ore_incidences: HashMap<String, f32>,
+    chunk_spawn_radius: u32,
+    seed: u32,
+    chunk_size: UVec2,
+    region_size: UVec2,
 }
 
 #[derive(Resource)]
@@ -21,12 +25,16 @@ fn load_terrain_settings(mut commands: Commands, asset_server: Res<AssetServer>)
     commands.insert_resource(TerrainSettingsHandle(terrain_settings));
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone, Debug, Reflect)]
 pub(crate) struct TerrainSettings {
     pub(crate) width: u32,
     pub(crate) height: u32,
     pub(crate) cell_size: f32,
     pub(crate) ore_incidences: HashMap<u16, f32>,
+    pub(crate) chunk_spawn_radius: u32,
+    pub(crate) seed: u32,
+    pub(crate) chunk_size: UVec2,
+    pub(crate) region_size: UVec2,
 }
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -59,6 +67,10 @@ fn setup_terrain_settings(
             height: terrain_settings.height,
             cell_size: terrain_settings.cell_size,
             ore_incidences,
+            chunk_spawn_radius: terrain_settings.chunk_spawn_radius,
+            seed: terrain_settings.seed,
+            chunk_size: terrain_settings.chunk_size,
+            region_size: terrain_settings.region_size,
         });
         state.set(TerrainSettingsState::Loaded);
     }
@@ -71,6 +83,7 @@ impl Plugin for TerrainSettingsPlugin {
         app.add_plugin(RonAssetPlugin::<TerrainSettingsRaw>::new(&[
             "terrain_settings.ron",
         ]))
+        .register_type::<TerrainSettings>()
         .add_asset::<TerrainSettingsRaw>()
         .add_state::<TerrainSettingsState>()
         .add_system(load_terrain_settings.in_schedule(OnEnter(TerrainSettingsState::Loading)))

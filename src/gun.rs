@@ -43,8 +43,7 @@ fn fire(
             let maybe_shooter = parents_query
                 .iter_ancestors(gun_entity)
                 .find_map(|ancestor| shooter_query.get(ancestor).ok());
-            if let Some(aiming_at) = maybe_shooter
-            {
+            if let Some(aiming_at) = maybe_shooter {
                 hit_events.send(HitEvent {
                     entity: aiming_at.target,
                     intersection: aiming_at.intersection,
