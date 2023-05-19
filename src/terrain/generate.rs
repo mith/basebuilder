@@ -3,11 +3,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ahash::{AHasher, HashMap, RandomState};
+use ahash::{AHasher, RandomState};
 use bevy::prelude::{Component, IVec2};
 use fast_poisson::Poisson2D;
 use ndarray::Array2;
-use noise::{NoiseFn, ScalePoint, Seedable, SuperSimplex, Turbulence};
+use noise::{NoiseFn, Seedable, SuperSimplex, TranslatePoint, Turbulence};
 use rand::{
     seq::{IteratorRandom, SliceRandom},
     SeedableRng,
@@ -15,8 +15,6 @@ use rand::{
 use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::terrain_settings::TerrainSettings;
-
-use super::Region;
 
 type GeneratorFunction = Arc<Mutex<Box<dyn NoiseFn<f64, 2> + Send + Sync>>>;
 
@@ -27,18 +25,21 @@ impl TerrainGenerator {
     pub(crate) fn new(terrain_settings: TerrainSettings) -> Self {
         let seed = terrain_settings.seed;
 
-        let simplex = SuperSimplex::new(seed);
-        let scale_point = ScalePoint::new(simplex)
-            .set_scale(0.00001)
-            .set_y_scale(0.1)
-            .set_x_scale(0.);
-        let turbulence = Turbulence::<_, SuperSimplex>::new(scale_point)
-            .set_seed(seed + 1)
-            .set_frequency(100.0)
-            .set_power(0.01);
+        // let simplex = SuperSimplex::new(seed);
+        // let scale_point = ScalePoint::new(simplex)
+        //     .set_scale(0.05); //.set_x_scale(0.);
+        let plane = PlaneNoise { height: 0. };
+        let turbulence = Turbulence::<_, SuperSimplex>::new(plane)
+            .set_seed(seed)
+            .set_frequency(0.003)
+            .set_power(10.0);
+
+        let translate = TranslatePoint::new(turbulence)
+            // .set_x_translation(terrain_settings.width as f64 / 2.)
+            .set_y_translation(-(terrain_settings.height as f64) / 2.);
 
         let terrain_function: Arc<Mutex<Box<dyn NoiseFn<f64, 2> + Send + Sync + 'static>>> =
-            Arc::new(Mutex::new(Box::new(turbulence)));
+            Arc::new(Mutex::new(Box::new(translate)));
         TerrainGenerator(terrain_function)
     }
 }
@@ -61,48 +62,30 @@ impl NoiseFn<f64, 2> for RadiusNoise {
     }
 }
 
-pub(crate) type ChunkData = Array2<u16>;
-
-pub(crate) fn generate_chunk(
-    location: IVec2,
-    regions: Arc<Mutex<HashMap<IVec2, Region>>>,
-    terrain_settings: TerrainSettings,
-    generator: GeneratorFunction,
-) -> (IVec2, ChunkData) {
-    let mut chunk_data = Array2::from_elem(
-        (
-            terrain_settings.chunk_size.x as usize,
-            terrain_settings.chunk_size.y as usize,
-        ),
-        0u16,
-    );
-
-    for x in 0..terrain_settings.chunk_size.x {
-        for y in 0..terrain_settings.chunk_size.y {
-            let region_location = IVec2::new(location.x, location.y);
-
-            let mut regions_guard = regions.lock().unwrap();
-            let region = regions_guard.entry(region_location).or_insert_with(|| {
-                let region =
-                    generate_region(region_location, generator.clone(), terrain_settings.clone());
-                Region { terrain: region }
-            });
-
-            chunk_data[[x as usize, y as usize]] = region.terrain[[x as usize, y as usize]];
-        }
-    }
-    (location, chunk_data)
+#[derive(Debug, Default)]
+pub(crate) struct PlaneNoise {
+    height: f64,
 }
 
-pub(crate) fn generate_region(
+impl NoiseFn<f64, 2> for PlaneNoise {
+    fn get(&self, point: [f64; 2]) -> f64 {
+        if point[1] < self.height {
+            1.
+        } else {
+            0.
+        }
+    }
+}
+
+pub(crate) fn generate_terrain(
     region_location: IVec2,
     generator: GeneratorFunction,
     terrain_settings: TerrainSettings,
 ) -> Array2<u16> {
     let mut terrain = Array2::from_elem(
         (
-            terrain_settings.region_size.x as usize,
-            terrain_settings.region_size.y as usize,
+            terrain_settings.width as usize,
+            terrain_settings.height as usize,
         ),
         0u16,
     );
@@ -123,15 +106,14 @@ pub(crate) fn generate_region(
     let ore_locations = Poisson2D::new()
         .with_dimensions(
             [
-                terrain_settings.region_size.x as f64,
-                terrain_settings.region_size.y as f64,
+                terrain_settings.width as f64,
+                terrain_settings.height as f64,
             ],
             5.,
         )
         .with_seed(ore_seed)
         .iter()
-        .choose_multiple(&mut rng, 1);
-    // .collect::<Vec<_>>();
+        .choose_multiple(&mut rng, 100);
 
     let ore_types = ore_locations
         .iter()
@@ -164,11 +146,11 @@ pub(crate) fn generate_region(
         })
         .collect::<Vec<_>>();
 
-    for x in 0..terrain_settings.region_size.x as usize {
-        for y in 0..terrain_settings.region_size.y as usize {
+    for x in 0..terrain_settings.width as usize {
+        for y in 0..terrain_settings.height as usize {
             let noise = generator.lock().unwrap().get([
-                (region_location.x * terrain_settings.region_size.x as i32 + x as i32).into(),
-                (region_location.y * terrain_settings.region_size.y as i32 + y as i32).into(),
+                (region_location.x * terrain_settings.width as i32 + x as i32).into(),
+                (region_location.y * terrain_settings.height as i32 + y as i32).into(),
             ]);
 
             let ore_type = ore_types.iter().fold(None, |acc, (ore_type, noise)| {

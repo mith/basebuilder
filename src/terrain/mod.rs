@@ -1,15 +1,10 @@
 mod generate;
 
-use std::{
-    hash::{BuildHasher, Hasher},
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
-use ahash::{HashMap, HashSet};
 use bevy::{
-    asset,
-    math::Vec3Swizzles,
     prelude::*,
+    sprite::MaterialMesh2dBundle,
     tasks::{AsyncComputeTaskPool, Task},
 };
 use bevy_ecs_tilemap::prelude::*;
@@ -20,7 +15,7 @@ use ndarray::prelude::*;
 
 use crate::{app_state::AppState, material::MaterialProperties, terrain_settings::TerrainSettings};
 
-use self::generate::{generate_chunk, ChunkData, TerrainGenerator};
+use self::generate::{generate_terrain, TerrainGenerator};
 
 #[derive(Component)]
 pub(crate) struct Terrain;
@@ -28,94 +23,42 @@ pub(crate) struct Terrain;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct TerrainSet;
 
-pub(crate) struct Region {
-    terrain: Array2<u16>,
+#[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
+pub enum TerrainState {
+    #[default]
+    Generating,
+    Spawned,
 }
 
-#[derive(Component, Reflect)]
-struct Chunk(IVec2);
-
-#[derive(Default, Resource)]
-pub struct ChunkManager {
-    spawned_chunks: HashSet<IVec2>,
-    loading_chunks: HashSet<IVec2>,
-    pub entities: HashMap<IVec2, Entity>,
-    regions: Arc<Mutex<HashMap<IVec2, Region>>>,
-}
-
+struct TerrainData(Array2<u16>);
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-struct GenerateChunk(pub(crate) Task<(IVec2, ChunkData)>);
+struct GenerateTerrain(pub(crate) Task<TerrainData>);
 
-fn spawn_chunks_around_camera(
+fn spawn_terrain(
     mut commands: Commands,
-    camera_query: Query<&GlobalTransform, With<Camera>>,
-    mut chunk_manager: ResMut<ChunkManager>,
-    terrain_settings: Res<TerrainSettings>,
-    generator_query: Query<&TerrainGenerator>,
-) {
-    for generator in &generator_query {
-        for transform in &camera_query {
-            let camera_chunk_pos =
-                global_pos_to_chunk_pos(&transform.translation().xy(), terrain_settings.chunk_size);
-            let chunk_spawn_radius = terrain_settings.chunk_spawn_radius as i32;
-            for y in
-                (camera_chunk_pos.y - chunk_spawn_radius)..(camera_chunk_pos.y + chunk_spawn_radius)
-            {
-                for x in (camera_chunk_pos.x - chunk_spawn_radius)
-                    ..(camera_chunk_pos.x + chunk_spawn_radius)
-                {
-                    if !chunk_manager.spawned_chunks.contains(&IVec2::new(x, y))
-                        && !chunk_manager.loading_chunks.contains(&IVec2::new(x, y))
-                    {
-                        let thread_pool = AsyncComputeTaskPool::get();
-                        let regions = chunk_manager.regions.clone();
-                        let terrain_settings = terrain_settings.clone();
-                        let generator = Arc::clone(&generator.0);
-                        let task = thread_pool.spawn(async move {
-                            generate_chunk(IVec2::new(x, y), regions, terrain_settings, generator)
-                        });
-                        commands.spawn(GenerateChunk(task));
-                        chunk_manager.loading_chunks.insert(IVec2::new(x, y));
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub fn global_pos_to_chunk_pos(camera_pos: &Vec2, chunk_size: UVec2) -> IVec2 {
-    let camera_pos = camera_pos.as_ivec2();
-    let chunk_size: IVec2 = IVec2::new(chunk_size.x as i32, chunk_size.y as i32);
-    camera_pos / chunk_size
-}
-
-fn spawn_chunk(
-    mut commands: Commands,
-    mut chunk_manager: ResMut<ChunkManager>,
-    mut generate_chunk_query: Query<(Entity, &mut GenerateChunk)>,
+    mut generate_terrain_query: Query<(Entity, &mut GenerateTerrain)>,
     terrain_settings: Res<TerrainSettings>,
     asset_server: Res<AssetServer>,
     material_properties: Res<MaterialProperties>,
+    mut terrain_state: ResMut<NextState<TerrainState>>,
 ) {
-    for (chunk_entity, mut generate_chunk) in &mut generate_chunk_query {
-        if let Some((chunk_pos, chunk_data)) =
-            future::block_on(future::poll_once(&mut generate_chunk.0))
-        {
+    for (terrain_entity, mut generate_terrain) in &mut generate_terrain_query {
+        if let Some(terrain_data) = future::block_on(future::poll_once(&mut generate_terrain.0)) {
             let texture_handle = asset_server.load("textures/terrain.png");
-            let chunk_transform = Transform::from_translation(Vec3::new(
-                chunk_pos.x as f32
-                    * terrain_settings.chunk_size.x as f32
-                    * terrain_settings.cell_size as f32,
-                chunk_pos.y as f32
-                    * terrain_settings.chunk_size.y as f32
-                    * terrain_settings.cell_size as f32,
+            let tilemap_size = TilemapSize {
+                x: terrain_settings.width,
+                y: terrain_settings.height,
+            };
+            let mut tile_storage = TileStorage::empty(tilemap_size);
+
+            let terrain_transform = Transform::from_translation(Vec3::new(
+                -(terrain_settings.width as f32) * terrain_settings.cell_size as f32 / 2.0,
+                -(terrain_settings.height as f32) * terrain_settings.cell_size as f32 / 2.0,
                 0.0,
             ));
 
-            let mut tile_storage = TileStorage::empty(terrain_settings.chunk_size.into());
-
-            for ((x, y), tile) in chunk_data.indexed_iter() {
+            for ((x, y), tile) in terrain_data.0.indexed_iter() {
                 if *tile > 0 {
                     let tile_pos = TilePos {
                         x: x as u32,
@@ -125,7 +68,7 @@ fn spawn_chunk(
                     let tile_entity = commands
                         .spawn(TileBundle {
                             position: tile_pos,
-                            tilemap_id: TilemapId(chunk_entity),
+                            tilemap_id: TilemapId(terrain_entity),
                             texture_index: TileTextureIndex(0),
                             color: material_properties.0[*tile as usize].color.into(),
                             ..default()
@@ -142,28 +85,23 @@ fn spawn_chunk(
 
             let tile_colliders = build_terrain_colliders(&terrain_settings, &tile_storage);
 
-            commands.entity(chunk_entity).insert((
-                Chunk(chunk_pos),
-                Name::new(format!("Chunk {:?}", chunk_pos)),
+            commands.entity(terrain_entity).insert((
                 TilemapBundle {
                     grid_size: tile_size.into(),
                     map_type: TilemapType::Square,
-                    size: terrain_settings.chunk_size.into(),
+                    size: tilemap_size,
                     storage: tile_storage,
                     texture: TilemapTexture::Single(texture_handle),
                     tile_size: tile_size,
-                    transform: chunk_transform,
+                    transform: terrain_transform,
                     ..default()
                 },
                 RigidBody::Fixed,
                 Collider::compound(tile_colliders),
             ));
 
-            commands.entity(chunk_entity).remove::<GenerateChunk>();
-
-            chunk_manager.loading_chunks.remove(&chunk_pos);
-            chunk_manager.spawned_chunks.insert(chunk_pos);
-            chunk_manager.entities.insert(chunk_pos, chunk_entity);
+            commands.entity(terrain_entity).remove::<GenerateTerrain>();
+            terrain_state.set(TerrainState::Spawned);
         }
     }
 }
@@ -173,29 +111,58 @@ struct SetupGenerator(Task<TerrainGenerator>);
 
 fn setup_terrain(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    config: Res<TerrainSettings>,
-    material_properties: Res<MaterialProperties>,
     terrain_settings: Res<TerrainSettings>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
     let settings = terrain_settings.clone();
+    let generator = TerrainGenerator::new(settings);
     let thread_pool = AsyncComputeTaskPool::get();
-    let task = thread_pool.spawn(async move { TerrainGenerator::new(settings) });
-    commands.spawn((Terrain, SetupGenerator(task)));
-}
+    let generator = Arc::clone(&generator.0);
+    let terrain_settings_clone = terrain_settings.clone();
+    let task = thread_pool.spawn(async move {
+        let region = generate_terrain(IVec2::new(0, 0), generator, terrain_settings_clone);
+        // let region = Array2::from_elem(
+        //     (
+        //         terrain_settings_clone.width as usize,
+        //         terrain_settings_clone.height as usize,
+        //     ),
+        //     1,
+        // );
+        TerrainData(region)
+    });
+    let terrain_transform = Transform::from_translation(Vec3::new(
+        -(terrain_settings.width as f32) * terrain_settings.cell_size as f32 / 2.0,
+        -(terrain_settings.height as f32) * terrain_settings.cell_size as f32 / 2.0,
+        0.0,
+    ));
 
-fn spawn_generator(
-    mut commands: Commands,
-    mut setup_generator_query: Query<(Entity, &mut SetupGenerator)>,
-) {
-    for (entity, mut setup_generator) in &mut setup_generator_query {
-        if let Some(generator) = future::block_on(future::poll_once(&mut setup_generator.0)) {
-            commands
-                .entity(entity)
-                .insert(generator)
-                .remove::<SetupGenerator>();
-        }
-    }
+    commands.spawn((
+        Name::new("Terrain"),
+        Terrain,
+        GenerateTerrain(task),
+        TransformBundle::from_transform(terrain_transform),
+        ComputedVisibility::default(),
+    ));
+    // Spawn a quad behind the terrain to act as a background
+    commands.spawn((
+        Name::new("Background"),
+        MaterialMesh2dBundle {
+            transform: Transform::from_xyz(
+                -terrain_settings.cell_size as f32 / 2.,
+                -terrain_settings.cell_size as f32 / 2.,
+                0.,
+            ),
+            material: materials.add(Color::TEAL.into()),
+            mesh: meshes
+                .add(Mesh::from(shape::Quad::new(Vec2::new(
+                    terrain_settings.cell_size as f32 * terrain_settings.width as f32,
+                    terrain_settings.cell_size as f32 * terrain_settings.height as f32,
+                ))))
+                .into(),
+            ..default()
+        },
+    ));
 }
 
 pub struct TileDamageEvent {
@@ -293,11 +260,11 @@ impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<TileDamageEvent>()
             .add_event::<TileDestroyedEvent>()
-            .register_type::<Chunk>()
-            .init_resource::<ChunkManager>()
+            .add_state::<TerrainState>()
             .add_system(setup_terrain.in_schedule(OnEnter(AppState::Game)))
-            .add_systems(
-                (spawn_generator, spawn_chunks_around_camera, spawn_chunk)
+            .add_system(
+                spawn_terrain
+                    .run_if(in_state(TerrainState::Generating))
                     .in_set(OnUpdate(AppState::Game))
                     .in_set(TerrainSet),
             )

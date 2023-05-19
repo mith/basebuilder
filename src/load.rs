@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    app_state::AppState, item::ItemsState, material::MaterialsState,
-    terrain_settings::TerrainSettingsState,
+    app_state::AppState, material::MaterialsState, terrain_settings::TerrainSettingsState,
 };
 
 pub(crate) struct LoadPlugin;

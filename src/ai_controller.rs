@@ -11,7 +11,7 @@ pub(crate) struct Target {
     pub(crate) position: Vec2,
 }
 
-fn move_to_target(mut target_query: Query<(&Target, &mut Walker, &Transform)>) {
+fn move_to_target(mut target_query: Query<(&Target, &mut Walker, &Transform), With<AiControlled>>) {
     for (target, mut controller, transform) in &mut target_query {
         let distance = target.position - transform.translation.xy();
         controller.move_direction = Some(distance.normalize());

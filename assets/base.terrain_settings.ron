@@ -1,5 +1,5 @@
 (
-    width: 100,
+    width: 200,
     height: 100,
     cell_size: 16.,
     ore_incidences: {
@@ -8,7 +8,4 @@
         "Stone": 2.,
     },
     seed: 1,
-    chunk_size: (16, 16),
-    chunk_spawn_radius: 2,
-    region_size: (16, 16),
 )

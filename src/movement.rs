@@ -1,4 +1,4 @@
-use bevy::{math::Vec3Swizzles, prelude::*, sprite::Mesh2dHandle};
+use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{
     KinematicCharacterController, KinematicCharacterControllerOutput, QueryFilter, RapierContext,
     RayIntersection,

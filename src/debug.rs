@@ -1,4 +1,4 @@
-use bevy::{input::common_conditions::input_toggle_active, prelude::*};
+use bevy::prelude::*;
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier2d::render::{DebugRenderContext, RapierDebugRenderPlugin};

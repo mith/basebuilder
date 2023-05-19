@@ -8,45 +8,42 @@ use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 use creep::CreepPlugin;
 use cursor_position::CursorPositionPlugin;
 use debug::DebugPlugin;
+use dwarf::DwarfPlugin;
 use gravity::GravityPlugin;
-use gun::GunPlugin;
 use health::HealthPlugin;
 use hit::HitPlugin;
 use hovered_tile::HoveredTilePlugin;
 use item::ItemPlugin;
 use load::LoadPlugin;
+use main_camera::MainCameraPlugin;
 use material::MaterialPlugin;
 use movement::MovementPlugin;
 use pan_zoom_camera2d::PanZoomCamera2dPlugin;
-use player::PlayerPlugin;
-use player_controller::PlayerControllerPlugin;
 use structure::StructurePlugin;
 use terrain::TerrainPlugin;
 use terrain_settings::TerrainSettingsPlugin;
 
 mod ai_controller;
 mod app_state;
+mod crafting;
 mod creep;
 mod cursor_position;
 mod debug;
+mod dwarf;
 mod gravity;
-mod gun;
 mod health;
 mod hit;
 mod hovered_tile;
+mod inventory;
 mod item;
 mod load;
+mod main_camera;
 mod material;
 mod movement;
 mod pan_zoom_camera2d;
-mod player;
-mod player_controller;
+mod structure;
 mod terrain;
 mod terrain_settings;
-// mod ui;
-mod crafting;
-mod inventory;
-mod structure;
 
 fn main() {
     let mut app = App::new();
@@ -70,8 +67,8 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK));
     // Add third-party plugins
     app.add_plugin(TilemapPlugin)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.));
-    // .add_plugin(ProtoPlugin::new());
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.))
+        .add_plugin(ProtoPlugin::new());
 
     // Add crate plugins
     app.add_plugin(AppStatePlugin)
@@ -80,20 +77,19 @@ fn main() {
         .add_plugin(CursorPositionPlugin)
         .add_plugin(PanZoomCamera2dPlugin)
         .add_plugin(MaterialPlugin)
-        // .add_plugin(ItemPlugin)
+        .add_plugin(ItemPlugin)
         .add_plugin(TerrainSettingsPlugin)
         .add_plugin(TerrainPlugin)
         .add_plugin(CreepPlugin)
         .add_plugin(HoveredTilePlugin)
-        // .add_plugin(PlayerPlugin)
-        // .add_plugin(PlayerControllerPlugin)
         .add_plugin(AiControllerPlugin)
         .add_plugin(GravityPlugin)
         .add_plugin(HealthPlugin)
         .add_plugin(MovementPlugin)
-        .add_plugin(GunPlugin)
-        .add_plugin(HitPlugin);
-    // .add_plugin(StructurePlugin);
+        .add_plugin(HitPlugin)
+        .add_plugin(StructurePlugin)
+        .add_plugin(MainCameraPlugin)
+        .add_plugin(DwarfPlugin);
 
     app.run();
 }

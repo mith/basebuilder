@@ -1,8 +1,5 @@
 use bevy::{prelude::*, utils::HashMap};
-use bevy_proto::{
-    prelude::{prototype_ready, ProtoCommands, PrototypesMut},
-    proto::Prototype,
-};
+use bevy_proto::prelude::{ProtoCommands, PrototypesMut};
 
 #[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum StructureState {

@@ -1,13 +1,9 @@
-use bevy::{math::Vec3Swizzles, prelude::*, sprite::MaterialMesh2dBundle};
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_rapier2d::prelude::{Collider, KinematicCharacterController, RigidBody};
 
 use crate::{
-    ai_controller::{AiControlled, Target},
-    app_state::AppState,
-    gravity::Gravity,
-    health::Health,
+    ai_controller::AiControlled, app_state::AppState, gravity::Gravity, health::Health,
     movement::Walker,
-    player::Player,
 };
 
 #[derive(Component)]
@@ -26,12 +22,10 @@ fn spawn_creep(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    dude_query: Query<(Entity, &Transform), With<Player>>,
     mut timer: ResMut<CreepSpawnTimer>,
     time: Res<Time>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
-        let (dude_entity, dude_transform) = dude_query.single();
         commands.spawn((
             Creep,
             Walker::default(),
@@ -50,10 +44,6 @@ fn spawn_creep(
             KinematicCharacterController::default(),
             Collider::round_cuboid(5., 5., 0.01),
             Gravity,
-            Target {
-                entity: Some(dude_entity),
-                position: dude_transform.translation.xy(),
-            },
         ));
     }
 }
