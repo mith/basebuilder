@@ -8,12 +8,15 @@ use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 use creep::CreepPlugin;
 use cursor_position::CursorPositionPlugin;
 use debug::DebugPlugin;
+use designation_layer::DesignationLayerPlugin;
+use dig::DigPlugin;
 use dwarf::DwarfPlugin;
 use gravity::GravityPlugin;
 use health::HealthPlugin;
 use hit::HitPlugin;
 use hovered_tile::HoveredTilePlugin;
 use item::ItemPlugin;
+use job::JobPlugin;
 use load::LoadPlugin;
 use main_camera::MainCameraPlugin;
 use material::MaterialPlugin;
@@ -29,6 +32,8 @@ mod crafting;
 mod creep;
 mod cursor_position;
 mod debug;
+mod designation_layer;
+mod dig;
 mod dwarf;
 mod gravity;
 mod health;
@@ -36,6 +41,7 @@ mod hit;
 mod hovered_tile;
 mod inventory;
 mod item;
+mod job;
 mod load;
 mod main_camera;
 mod material;
@@ -80,7 +86,7 @@ fn main() {
         .add_plugin(ItemPlugin)
         .add_plugin(TerrainSettingsPlugin)
         .add_plugin(TerrainPlugin)
-        .add_plugin(CreepPlugin)
+        // .add_plugin(CreepPlugin)
         .add_plugin(HoveredTilePlugin)
         .add_plugin(AiControllerPlugin)
         .add_plugin(GravityPlugin)
@@ -89,7 +95,10 @@ fn main() {
         .add_plugin(HitPlugin)
         .add_plugin(StructurePlugin)
         .add_plugin(MainCameraPlugin)
-        .add_plugin(DwarfPlugin);
+        .add_plugin(DwarfPlugin)
+        .add_plugin(JobPlugin)
+        .add_plugin(DigPlugin)
+        .add_plugin(DesignationLayerPlugin);
 
     app.run();
 }

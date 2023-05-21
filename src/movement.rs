@@ -17,14 +17,13 @@ pub(crate) struct Jumper {
 fn walk(
     mut dude_query: Query<(
         &mut KinematicCharacterController,
-        &KinematicCharacterControllerOutput,
         &Walker,
-        Option<&mut Jumper>,
+        Option<(&mut Jumper, &KinematicCharacterControllerOutput)>,
     )>,
     time: Res<Time>,
 ) {
-    for (mut controller, controller_output, walker, mut maybe_jumper) in &mut dude_query {
-        if let Some(jumper) = maybe_jumper.as_mut() {
+    for (mut controller, walker, mut maybe_jumper) in &mut dude_query {
+        if let Some((jumper, controller_output)) = maybe_jumper.as_mut() {
             if jumper.jump && controller_output.grounded {
                 jumper.jump_timer = Some(Timer::from_seconds(0.5, TimerMode::Once));
             }

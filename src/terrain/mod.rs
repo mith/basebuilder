@@ -8,7 +8,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
 };
 use bevy_ecs_tilemap::prelude::*;
-use bevy_rapier2d::prelude::{Collider, RigidBody, Vect};
+use bevy_rapier2d::prelude::{Collider, CollisionGroups, Group, RigidBody, Vect};
 
 use futures_lite::future;
 use ndarray::prelude::*;
@@ -34,6 +34,8 @@ struct TerrainData(Array2<u16>);
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 struct GenerateTerrain(pub(crate) Task<TerrainData>);
+
+pub const TERRAIN_COLLISION_GROUP: Group = Group::GROUP_1;
 
 fn spawn_terrain(
     mut commands: Commands,
@@ -97,6 +99,7 @@ fn spawn_terrain(
                     ..default()
                 },
                 RigidBody::Fixed,
+                CollisionGroups::new(TERRAIN_COLLISION_GROUP, Group::ALL),
                 Collider::compound(tile_colliders),
             ));
 
@@ -182,9 +185,9 @@ fn update_terrain(
         if let Ok(mut tile_health) = damage_tiles_query.get_mut(damage_event.tile) {
             tile_health.0 = tile_health.0.saturating_sub(damage_event.damage);
         } else {
-            commands
-                .entity(damage_event.tile)
-                .insert(TileHealth(100u32.saturating_sub(damage_event.damage)));
+            if let Some(mut tile_entity) = commands.get_entity(damage_event.tile) {
+                tile_entity.insert(TileHealth(100u32.saturating_sub(damage_event.damage)));
+            }
         }
     }
 }
@@ -201,12 +204,15 @@ fn color_damage_tile(
     }
 }
 
-pub(crate) struct TileDestroyedEvent(pub(crate) Entity);
+pub(crate) struct TileDestroyedEvent {
+    pub(crate) entity: Entity,
+    pub(crate) tile_pos: TilePos,
+}
 
 fn remove_destroyed_tiles(
     mut commands: Commands,
     config: Res<TerrainSettings>,
-    tile_query: Query<(Entity, &TileHealth, &TilePos)>,
+    tile_query: Query<(Entity, &TileHealth, &TilePos), Changed<TileHealth>>,
     mut tilemap_query: Query<(Entity, &mut TileStorage), With<Terrain>>,
     mut destroyed_tiles: EventWriter<TileDestroyedEvent>,
 ) {
@@ -215,7 +221,10 @@ fn remove_destroyed_tiles(
         if tile_health.0 == 0 {
             commands.entity(tile_entity).despawn();
             tile_storage.remove(&tile_pos);
-            destroyed_tiles.send(TileDestroyedEvent(tile_entity));
+            destroyed_tiles.send(TileDestroyedEvent {
+                entity: tile_entity,
+                tile_pos: *tile_pos,
+            });
         }
     }
 
@@ -272,10 +281,11 @@ impl Plugin for TerrainPlugin {
                 (
                     update_terrain,
                     color_damage_tile.after(update_terrain),
-                    // remove_destroyed_tiles.after(update_terrain),
+                    remove_destroyed_tiles.after(update_terrain),
                 )
                     .in_set(OnUpdate(AppState::Game))
-                    .in_set(TerrainSet),
+                    .in_set(TerrainSet)
+                    .distributive_run_if(in_state(TerrainState::Spawned)),
             );
     }
 }

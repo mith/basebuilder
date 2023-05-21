@@ -1,16 +1,20 @@
+use std::ops::BitXor;
+
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
-use bevy_rapier2d::prelude::{Collider, QueryFilter, RapierContext, RigidBody};
-use rand::{
-    seq::{IteratorRandom, SliceRandom},
-    Rng, SeedableRng,
+use bevy_rapier2d::{
+    control::KinematicCharacterController,
+    prelude::{Collider, CollisionGroups, Group, QueryFilter, RapierContext, RigidBody},
 };
+use rand::{seq::IteratorRandom, SeedableRng};
 use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
     ai_controller::AiControlled,
     app_state::AppState,
-    movement::Walker,
-    terrain::{TerrainSet, TerrainState},
+    gravity::Gravity,
+    job::Worker,
+    movement::{Jumper, Walker},
+    terrain::{TerrainSet, TerrainState, TERRAIN_COLLISION_GROUP},
     terrain_settings::TerrainSettings,
 };
 
@@ -38,6 +42,8 @@ pub enum DwarvesState {
 #[derive(Component)]
 pub struct Dwarf;
 
+pub const DWARF_COLLISION_GROUP: Group = Group::GROUP_2;
+
 fn spawn_dwarves(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -62,23 +68,44 @@ fn spawn_dwarves(
         if let Some((entity, hit)) =
             rapier_context.cast_ray(Vec2::new(x, y), ray_dir, max_toi, true, filter)
         {
-            commands.spawn((
-                Dwarf,
-                Name::new("Dwarf"),
-                MaterialMesh2dBundle {
-                    transform: Transform::from_xyz(x, y - hit + 6., 2.),
-                    material: materials.add(Color::WHITE.into()),
-                    mesh: meshes
-                        .add(Mesh::from(shape::Quad::new(Vec2::new(12., 12.))))
-                        .into(),
-                    ..default()
-                },
-                RigidBody::KinematicPositionBased,
-                Collider::round_cuboid(12., 12., 0.01),
-                AiControlled,
-                Walker::default(),
-            ));
+            spawn_dwarf(&mut commands, x, y - hit + 6., &mut materials, &mut meshes);
         }
     }
     dwarves_state.set(DwarvesState::Spawned);
+}
+
+fn spawn_dwarf(
+    commands: &mut Commands,
+    x: f32,
+    y: f32,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    meshes: &mut ResMut<Assets<Mesh>>,
+) {
+    commands.spawn((
+        Dwarf,
+        Name::new("Dwarf"),
+        MaterialMesh2dBundle {
+            transform: Transform::from_xyz(x, y, 2.),
+            material: materials.add(Color::WHITE.into()),
+            mesh: meshes
+                .add(Mesh::from(shape::Quad::new(Vec2::new(12., 12.))))
+                .into(),
+            ..default()
+        },
+        RigidBody::KinematicPositionBased,
+        Collider::round_cuboid(5., 5., 0.01),
+        CollisionGroups::new(DWARF_COLLISION_GROUP, TERRAIN_COLLISION_GROUP),
+        KinematicCharacterController {
+            filter_groups: Some(CollisionGroups::new(
+                DWARF_COLLISION_GROUP,
+                TERRAIN_COLLISION_GROUP,
+            )),
+            ..default()
+        },
+        AiControlled,
+        Worker,
+        Walker::default(),
+        Jumper::default(),
+        Gravity,
+    ));
 }
