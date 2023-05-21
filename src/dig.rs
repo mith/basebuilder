@@ -2,10 +2,7 @@ use bevy::{
     math::{Vec3Swizzles, Vec4Swizzles},
     prelude::*,
 };
-use bevy_ecs_tilemap::{
-    prelude::{TilemapGridSize, TilemapSize, TilemapType},
-    tiles::{TilePos, TileStorage},
-};
+use bevy_ecs_tilemap::{prelude::TilemapGridSize, tiles::TilePos};
 
 use crate::{
     ai_controller::MoveTo,
@@ -106,7 +103,17 @@ fn finish_digging(
     mut commands: Commands,
     mut tile_destroyed_event_reader: EventReader<TileDestroyedEvent>,
     digging_worker_query: Query<(&Digging, Entity), With<Worker>>,
+    mut unassigned_workers: RemovedComponents<HasJob>,
 ) {
+    for unassigned_worker_entity in unassigned_workers.iter() {
+        if digging_worker_query.get(unassigned_worker_entity).is_ok() {
+            commands
+                .entity(unassigned_worker_entity)
+                .remove::<Digging>()
+                .remove::<JobTimer>()
+                .remove::<HasJob>();
+        }
+    }
     for tile_destroyed_event in tile_destroyed_event_reader.iter() {
         for (digging, worker_entity) in &digging_worker_query {
             if digging.0 == tile_destroyed_event.entity {

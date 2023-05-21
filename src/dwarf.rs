@@ -1,5 +1,3 @@
-use std::ops::BitXor;
-
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_rapier2d::{
     control::KinematicCharacterController,
@@ -65,7 +63,7 @@ fn spawn_dwarves(
         let max_toi = terrain_settings.cell_size * terrain_settings.height as f32;
         let filter = QueryFilter::default();
 
-        if let Some((entity, hit)) =
+        if let Some((_entity, hit)) =
             rapier_context.cast_ray(Vec2::new(x, y), ray_dir, max_toi, true, filter)
         {
             spawn_dwarf(&mut commands, x, y - hit + 6., &mut materials, &mut meshes);

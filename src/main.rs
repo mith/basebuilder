@@ -48,6 +48,7 @@ mod material;
 mod movement;
 mod pan_zoom_camera2d;
 mod structure;
+mod stuck;
 mod terrain;
 mod terrain_settings;
 
