@@ -1,7 +1,9 @@
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_rapier2d::{
     control::KinematicCharacterController,
-    prelude::{Collider, CollisionGroups, Group, QueryFilter, RapierContext, RigidBody},
+    prelude::{
+        CharacterAutostep, Collider, CollisionGroups, Group, QueryFilter, RapierContext, RigidBody,
+    },
 };
 use rand::{seq::IteratorRandom, SeedableRng};
 use rand_xoshiro::Xoshiro256StarStar;
@@ -98,6 +100,11 @@ fn spawn_dwarf(
                 DWARF_COLLISION_GROUP,
                 TERRAIN_COLLISION_GROUP,
             )),
+            autostep: Some(CharacterAutostep {
+                max_height: bevy_rapier2d::prelude::CharacterLength::Absolute(16.),
+                min_width: bevy_rapier2d::prelude::CharacterLength::Absolute(16.),
+                include_dynamic_bodies: true,
+            }),
             ..default()
         },
         AiControlled,
