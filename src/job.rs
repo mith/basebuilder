@@ -8,7 +8,10 @@ pub struct JobPlugin;
 
 impl Plugin for JobPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems((assign_job, blacklist_timer, stuck, stuck_timer));
+        app.register_type::<HasJob>()
+            .register_type::<AssignedTo>()
+            .register_type::<BlacklistedWorkers>()
+            .add_systems((assign_job, blacklist_timer, stuck, stuck_timer));
     }
 }
 
@@ -18,15 +21,15 @@ pub struct Job;
 #[derive(Component)]
 pub struct Worker;
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct HasJob(Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct AssignedTo {
     pub entity: Entity,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 struct BlacklistedWorkers(HashMap<Entity, Timer>);
 
 fn assign_job(

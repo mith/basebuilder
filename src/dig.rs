@@ -16,7 +16,9 @@ pub struct DigPlugin;
 
 impl Plugin for DigPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems((designate_dig, dig, dig_timer, finish_digging));
+        app.register_type::<Digging>()
+            .register_type::<JobTimer>()
+            .add_systems((designate_dig, dig, dig_timer, finish_digging));
     }
 }
 
@@ -37,10 +39,10 @@ fn designate_dig(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct Digging(Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct JobTimer(pub Timer);
 
 fn dig(
