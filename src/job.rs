@@ -32,11 +32,14 @@ pub struct AssignedTo {
 #[derive(Component, Reflect)]
 struct BlacklistedWorkers(HashMap<Entity, Timer>);
 
+#[derive(Component)]
+pub struct Accessible;
+
 fn assign_job(
     mut commands: Commands,
     unassigned_job_query: Query<
         (Entity, &TilePos, Option<&BlacklistedWorkers>),
-        (With<Job>, Without<AssignedTo>),
+        (With<Job>, Without<AssignedTo>, With<Accessible>),
     >,
     worker_query: Query<(Entity, &GlobalTransform), (With<Worker>, Without<HasJob>)>,
     terrain_query: Query<(&GlobalTransform, &TilemapTileSize), With<Terrain>>,

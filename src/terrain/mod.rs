@@ -30,7 +30,9 @@ pub enum TerrainState {
     Spawned,
 }
 
-struct TerrainData(Array2<u16>);
+#[derive(Component)]
+pub struct TerrainData(pub Array2<u16>);
+
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 struct GenerateTerrain(pub(crate) Task<TerrainData>);
@@ -98,6 +100,7 @@ fn spawn_terrain(
                     transform: terrain_transform,
                     ..default()
                 },
+                terrain_data,
                 RigidBody::Fixed,
                 CollisionGroups::new(TERRAIN_COLLISION_GROUP, Group::ALL),
                 Collider::compound(tile_colliders),
@@ -213,14 +216,15 @@ fn remove_destroyed_tiles(
     mut commands: Commands,
     config: Res<TerrainSettings>,
     tile_query: Query<(Entity, &TileHealth, &TilePos), Changed<TileHealth>>,
-    mut tilemap_query: Query<(Entity, &mut TileStorage), With<Terrain>>,
+    mut tilemap_query: Query<(Entity, &mut TileStorage, &mut TerrainData), With<Terrain>>,
     mut destroyed_tiles: EventWriter<TileDestroyedEvent>,
 ) {
-    let (tilemap_entity, mut tile_storage) = tilemap_query.single_mut();
+    let (tilemap_entity, mut tile_storage, mut terrain_data) = tilemap_query.single_mut();
     for (tile_entity, tile_health, tile_pos) in &tile_query {
         if tile_health.0 == 0 {
             commands.entity(tile_entity).despawn();
             tile_storage.remove(&tile_pos);
+            terrain_data.0[[tile_pos.x as usize, tile_pos.y as usize]] = 0;
             destroyed_tiles.send(TileDestroyedEvent {
                 entity: tile_entity,
                 tile_pos: *tile_pos,

@@ -2,14 +2,18 @@ use bevy::{
     math::{Vec3Swizzles, Vec4Swizzles},
     prelude::*,
 };
-use bevy_ecs_tilemap::{prelude::TilemapGridSize, tiles::TilePos};
+use bevy_ecs_tilemap::{
+    helpers::square_grid::neighbors::SquareDirection,
+    prelude::{TilemapGridSize, TilemapSize},
+    tiles::{TilePos, TileStorage},
+};
 
 use crate::{
     ai_controller::MoveTo,
     designation_layer::Designated,
     hovered_tile::HoveredTile,
-    job::{AssignedTo, HasJob, Job, Worker},
-    terrain::{Terrain, TileDamageEvent, TileDestroyedEvent},
+    job::{Accessible, AssignedTo, HasJob, Job, Worker},
+    terrain::{Terrain, TerrainData, TerrainSet, TileDamageEvent, TileDestroyedEvent},
 };
 
 pub struct DigPlugin;
@@ -18,7 +22,13 @@ impl Plugin for DigPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Digging>()
             .register_type::<JobTimer>()
-            .add_systems((designate_dig, dig, dig_timer, finish_digging));
+            .add_systems((
+                designate_dig,
+                check_accessibility.before(TerrainSet),
+                dig,
+                dig_timer.before(TerrainSet),
+                finish_digging,
+            ));
     }
 }
 
@@ -35,6 +45,41 @@ fn designate_dig(
             commands
                 .entity(tile_entity)
                 .insert((Job, DigTarget, Designated));
+        }
+    }
+}
+
+fn check_accessibility(
+    mut commands: Commands,
+    terrain_tilemap_query: Query<(&TerrainData, &TilemapSize), With<Terrain>>,
+    job_query: Query<(Entity, &TilePos), (With<DigTarget>, With<Job>)>,
+) {
+    for (terrain_data, tilemap_size) in &terrain_tilemap_query {
+        for (job_entity, job_tile_pos) in &job_query {
+            // check if any of the tiles to the side and top of the job tile are accessible
+            let tile_pos_up = job_tile_pos
+                .square_offset(&SquareDirection::North, tilemap_size)
+                .map(|pos| TilePos::new(pos.x, pos.y));
+            let tile_pos_left = job_tile_pos.square_offset(&SquareDirection::West, tilemap_size);
+            let tile_pos_right = job_tile_pos.square_offset(&SquareDirection::East, tilemap_size);
+
+            let all_tile_positions: Vec<TilePos> = [tile_pos_up, tile_pos_left, tile_pos_right]
+                .iter()
+                .flatten()
+                .copied()
+                .collect();
+
+            let accessible = all_tile_positions.iter().any(|pos| {
+                terrain_data
+                    .0
+                    .get([pos.x as usize, pos.y as usize])
+                    .map_or(false, |tile| *tile == 0)
+            });
+            if accessible {
+                commands.entity(job_entity).insert(Accessible);
+            } else {
+                commands.entity(job_entity).remove::<Accessible>();
+            }
         }
     }
 }
