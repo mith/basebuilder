@@ -154,22 +154,23 @@ fn finish_digging(
 ) {
     for unassigned_worker_entity in unassigned_workers.iter() {
         if digging_worker_query.get(unassigned_worker_entity).is_ok() {
-            commands
-                .entity(unassigned_worker_entity)
-                .remove::<Digging>()
-                .remove::<JobTimer>()
-                .remove::<HasJob>();
+            remove_digging_job(&mut commands, unassigned_worker_entity);
         }
     }
     for tile_destroyed_event in tile_destroyed_event_reader.iter() {
         for (digging, worker_entity) in &digging_worker_query {
             if digging.0 == tile_destroyed_event.entity {
-                commands
-                    .entity(worker_entity)
-                    .remove::<Digging>()
-                    .remove::<JobTimer>()
-                    .remove::<HasJob>();
+                remove_digging_job(&mut commands, worker_entity);
             }
         }
     }
+}
+
+fn remove_digging_job(commands: &mut Commands, unassigned_worker_entity: Entity) {
+    commands
+        .entity(unassigned_worker_entity)
+        .remove::<Digging>()
+        .remove::<JobTimer>()
+        .remove::<HasJob>()
+        .remove::<MoveTo>();
 }
