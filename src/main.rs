@@ -47,6 +47,7 @@ mod main_camera;
 mod material;
 mod movement;
 mod pan_zoom_camera2d;
+mod pathfinding;
 mod structure;
 mod stuck;
 mod terrain;

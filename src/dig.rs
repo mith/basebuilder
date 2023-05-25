@@ -4,7 +4,7 @@ use bevy::{
 };
 use bevy_ecs_tilemap::{
     helpers::square_grid::neighbors::SquareDirection,
-    prelude::{TilemapGridSize, TilemapSize},
+    prelude::{SquarePos, TilemapGridSize, TilemapSize},
     tiles::{TilePos, TileStorage},
 };
 
@@ -13,6 +13,7 @@ use crate::{
     designation_layer::Designated,
     hovered_tile::HoveredTile,
     job::{Accessible, AssignedTo, HasJob, Job, Worker},
+    pathfinding::find_path,
     terrain::{Terrain, TerrainData, TerrainSet, TileDamageEvent, TileDestroyedEvent},
 };
 
@@ -94,13 +95,15 @@ fn dig(
     mut commands: Commands,
     assigned_dig_job_query: Query<(Entity, &TilePos, &AssignedTo), (With<Job>, With<DigTarget>)>,
     worker_query: Query<&GlobalTransform, (With<Worker>, Without<Digging>)>,
-    terrain_tilemap_query: Query<(&Transform, &TilemapGridSize), With<Terrain>>,
+    terrain_tilemap_query: Query<(&GlobalTransform, &TilemapGridSize, &TerrainData), With<Terrain>>,
 ) {
     // Make a walk walk to the dig target and start digging
     for (dig_job_entity, dig_target_tile_pos, assigned_to) in &assigned_dig_job_query {
-        if let Ok(dwarf_transform) = worker_query.get(assigned_to.entity) {
-            for (terrain_transform, tilemap_grid_size) in &terrain_tilemap_query {
-                let tile_global_position = (terrain_transform.compute_matrix()
+        if let Ok(worker_transform) = worker_query.get(assigned_to.entity) {
+            for (terrain_global_transform, tilemap_grid_size, terrain_data) in
+                &terrain_tilemap_query
+            {
+                let tile_global_position = (terrain_global_transform.compute_matrix()
                     * Vec4::new(
                         dig_target_tile_pos.x as f32 * tilemap_grid_size.x,
                         dig_target_tile_pos.y as f32 * tilemap_grid_size.y,
@@ -109,11 +112,11 @@ fn dig(
                     ))
                 .xy();
 
-                if dwarf_transform
+                if worker_transform
                     .translation()
                     .xy()
                     .distance(tile_global_position)
-                    < 20.
+                    < 26.
                 {
                     commands.entity(assigned_to.entity).remove::<MoveTo>();
                     commands.entity(assigned_to.entity).insert((
@@ -121,10 +124,69 @@ fn dig(
                         JobTimer(Timer::from_seconds(1., TimerMode::Repeating)),
                     ));
                 } else {
-                    commands.entity(assigned_to.entity).insert(MoveTo {
-                        entity: Some(dig_job_entity),
-                        position: tile_global_position,
-                    });
+                    let walker_pos_in_terrain_transform =
+                        terrain_global_transform.compute_matrix().inverse()
+                            * Vec4::new(
+                                worker_transform.translation().x,
+                                worker_transform.translation().y,
+                                0.,
+                                1.,
+                            );
+
+                    let walker_square_pos = SquarePos::from_world_pos(
+                        &walker_pos_in_terrain_transform.xy(),
+                        tilemap_grid_size,
+                    );
+
+                    let walker_tile_pos =
+                        UVec2::new(walker_square_pos.x as u32, walker_square_pos.y as u32);
+
+                    // check if there are any tiles near the dig target that are accessible
+                    // and if so, make the worker move to them
+                    for x in -1..2i32 {
+                        for y in -1..2i32 {
+                            if x == 0 && y == 0 {
+                                continue;
+                            }
+                            let p = TilePos::new(
+                                (dig_target_tile_pos.x as i32 + x) as u32,
+                                (dig_target_tile_pos.y as i32 + y) as u32,
+                            );
+                            let p_is_air = terrain_data
+                                .0
+                                .get([p.x as usize, p.y as usize])
+                                .map_or(false, |tile| *tile == 0);
+                            let ground_underneath_p = terrain_data
+                                .0
+                                .get([p.x as usize, p.y as usize - 1])
+                                .map_or(false, |tile| *tile != 0);
+                            let p_is_next_to_target =
+                                (p.x as i32 - dig_target_tile_pos.x as i32).abs() <= 1
+                                    && (p.y as i32 - dig_target_tile_pos.y as i32).abs() <= 1;
+                            let path_to_p =
+                                find_path(&terrain_data, walker_tile_pos, UVec2::new(p.x, p.y));
+                            if p_is_air
+                                && ground_underneath_p
+                                && p_is_next_to_target
+                                && !path_to_p.is_empty()
+                            {
+                                let tile_global_position = (terrain_global_transform
+                                    .compute_matrix()
+                                    * Vec4::new(
+                                        p.x as f32 * tilemap_grid_size.x,
+                                        p.y as f32 * tilemap_grid_size.y,
+                                        0.,
+                                        1.,
+                                    ))
+                                .xy();
+                                commands.entity(assigned_to.entity).insert(MoveTo {
+                                    entity: Some(dig_job_entity),
+                                    position: tile_global_position,
+                                });
+                                return;
+                            }
+                        }
+                    }
                 }
             }
         }

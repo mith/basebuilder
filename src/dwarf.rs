@@ -55,7 +55,7 @@ fn spawn_dwarves(
     let mut rng = Xoshiro256StarStar::seed_from_u64(terrain_settings.seed as u64);
     let possible_x_pos: Vec<f32> = (-5..=5)
         .map(|x| x as f32 * terrain_settings.cell_size)
-        .choose_multiple(&mut rng, 6);
+        .choose_multiple(&mut rng, 7);
     for x in possible_x_pos {
         // pick location within the 10 center cells of the map
         // y location is always the top of the map

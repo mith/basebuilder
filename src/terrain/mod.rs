@@ -222,7 +222,7 @@ fn remove_destroyed_tiles(
     let (tilemap_entity, mut tile_storage, mut terrain_data) = tilemap_query.single_mut();
     for (tile_entity, tile_health, tile_pos) in &tile_query {
         if tile_health.0 == 0 {
-            commands.entity(tile_entity).despawn();
+            commands.entity(tile_entity).despawn_recursive();
             tile_storage.remove(&tile_pos);
             terrain_data.0[[tile_pos.x as usize, tile_pos.y as usize]] = 0;
             destroyed_tiles.send(TileDestroyedEvent {

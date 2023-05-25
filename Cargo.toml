@@ -34,6 +34,7 @@ egui = "0.21.0"
 bevy_egui = "0.20.3"
 tracing = "0.1.37"
 bevy_proto = "0.10.0"
+pathfinding = "4.2.1"
 
 [patch.crates-io]
 # bevy_ecs_tilemap = { git = 'https://github.com/StarArawn/bevy_ecs_tilemap', branch = "main" }
