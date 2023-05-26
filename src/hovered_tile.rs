@@ -6,7 +6,9 @@ use bevy_ecs_tilemap::{
 };
 
 use crate::{
-    app_state::AppState, cursor_position::CursorPosition, terrain::TerrainParams,
+    app_state::AppState,
+    cursor_position::CursorPosition,
+    terrain::{TerrainParams, TerrainSet, TileDestroyedEvent},
     terrain_settings::TerrainSettings,
 };
 
@@ -108,15 +110,23 @@ fn unhighlight_hovered_tile(
     mut commands: Commands,
     mut hovered_tiles_removed: RemovedComponents<HoveredTile>,
     tile_query: Query<&TilePos>,
-    mut tilemap_query: Query<&mut TileStorage, With<HoverLayer>>,
+    mut hoverlayer_tilemap_query: Query<&mut TileStorage, With<HoverLayer>>,
+    mut destroyed_tiles: EventReader<TileDestroyedEvent>,
 ) {
-    let mut tile_storage = tilemap_query.single_mut();
+    let mut hovertile_storage = hoverlayer_tilemap_query.single_mut();
     for unhovered_tile_entity in hovered_tiles_removed.iter() {
         if let Ok(tile_pos) = tile_query.get(unhovered_tile_entity) {
-            if let Some(hover_tile_entity) = tile_storage.get(tile_pos) {
+            if let Some(hover_tile_entity) = hovertile_storage.get(tile_pos) {
                 commands.entity(hover_tile_entity).despawn_recursive();
-                tile_storage.remove(&tile_pos);
+                hovertile_storage.remove(&tile_pos);
             }
+        } // else: tile was destroyed and tile_pos can no longer be queried
+    }
+    // remove destroyed tiles from hoverlayer
+    for destroyed_tile in destroyed_tiles.iter() {
+        if let Some(hovertile_entity) = hovertile_storage.get(&destroyed_tile.tile_pos) {
+            commands.entity(hovertile_entity).despawn_recursive();
+            hovertile_storage.remove(&destroyed_tile.tile_pos);
         }
     }
 }
@@ -138,7 +148,8 @@ impl Plugin for HoveredTilePlugin {
                 )
                     .chain()
                     .in_set(OnUpdate(AppState::Game))
-                    .in_set(HoveredTileSet),
+                    .in_set(HoveredTileSet)
+                    .after(TerrainSet),
             );
     }
 }

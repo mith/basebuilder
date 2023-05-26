@@ -182,6 +182,9 @@ pub struct TileDamageEvent {
 #[derive(Component)]
 pub(crate) struct TileHealth(u32);
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+struct TerrainUpdateSet;
+
 fn update_terrain(
     mut commands: Commands,
     mut tile_damage_events: EventReader<TileDamageEvent>,
@@ -285,14 +288,19 @@ impl Plugin for TerrainPlugin {
                     .in_set(TerrainSet),
             )
             .add_systems(
-                (
-                    update_terrain,
-                    color_damage_tile.after(update_terrain),
-                    remove_destroyed_tiles.after(update_terrain),
-                )
+                (update_terrain, apply_system_buffers)
+                    .chain()
                     .in_set(OnUpdate(AppState::Game))
                     .in_set(TerrainSet)
+                    .in_set(TerrainUpdateSet)
                     .distributive_run_if(in_state(TerrainState::Spawned)),
+            )
+            .add_systems(
+                (color_damage_tile, remove_destroyed_tiles)
+                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(TerrainSet)
+                    .distributive_run_if(in_state(TerrainState::Spawned))
+                    .after(TerrainUpdateSet),
             );
     }
 }
