@@ -1,6 +1,18 @@
 use bevy::{prelude::*, reflect::TypeUuid};
 use bevy_common_assets::ron::RonAssetPlugin;
 
+pub struct ItemPlugin;
+
+impl Plugin for ItemPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugin(RonAssetPlugin::<Items>::new(&["items.ron"]))
+            .add_asset::<Items>()
+            .add_state::<ItemsState>()
+            .add_system(load_items.in_schedule(OnEnter(ItemsState::Loading)))
+            .add_system(setup_items.run_if(in_state(ItemsState::Loading)));
+    }
+}
+
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct U8Color {
     r: u8,
@@ -58,17 +70,5 @@ fn setup_items(
     if let Some(items) = items_assets.get(&items.0) {
         commands.insert_resource(ItemProperties(items.0.clone()));
         state.set(ItemsState::Loaded);
-    }
-}
-
-pub struct ItemPlugin;
-
-impl Plugin for ItemPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugin(RonAssetPlugin::<Items>::new(&["items.ron"]))
-            .add_asset::<Items>()
-            .add_state::<ItemsState>()
-            .add_system(load_items.in_schedule(OnEnter(ItemsState::Loading)))
-            .add_system(setup_items.run_if(in_state(ItemsState::Loading)));
     }
 }

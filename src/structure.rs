@@ -1,13 +1,6 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_proto::prelude::{ProtoCommands, PrototypesMut};
 
-#[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
-pub enum StructureState {
-    #[default]
-    Loading,
-    Loaded,
-}
-
 pub struct StructurePlugin;
 
 impl Plugin for StructurePlugin {
@@ -20,6 +13,13 @@ impl Plugin for StructurePlugin {
             .add_system(loading.run_if(in_state(StructureState::Loading)))
             .add_system(spawn_ghost_structure.run_if(in_state(StructureState::Loaded)));
     }
+}
+
+#[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
+pub enum StructureState {
+    #[default]
+    Loading,
+    Loaded,
 }
 
 #[derive(Resource)]

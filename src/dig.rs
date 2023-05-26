@@ -1,7 +1,4 @@
-use bevy::{
-    math::{Vec3Swizzles, Vec4Swizzles},
-    prelude::*,
-};
+use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_ecs_tilemap::{
     helpers::square_grid::neighbors::SquareDirection, prelude::TilemapSize, tiles::TilePos,
 };

@@ -1,6 +1,18 @@
 use bevy::{prelude::*, reflect::TypeUuid};
 use bevy_common_assets::ron::RonAssetPlugin;
 
+pub(crate) struct MaterialPlugin;
+
+impl Plugin for MaterialPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugin(RonAssetPlugin::<Materials>::new(&["materials.ron"]))
+            .add_asset::<Materials>()
+            .add_state::<MaterialsState>()
+            .add_system(load_materials.in_schedule(OnEnter(MaterialsState::Loading)))
+            .add_system(setup_materials.run_if(in_state(MaterialsState::Loading)));
+    }
+}
+
 #[derive(serde::Deserialize, Clone)]
 pub(crate) struct Material {
     pub(crate) name: String,
@@ -38,17 +50,5 @@ fn setup_materials(
     if let Some(materials) = materials_assets.get(&materials.0) {
         commands.insert_resource(MaterialProperties(materials.0.clone()));
         state.set(MaterialsState::Loaded);
-    }
-}
-
-pub(crate) struct MaterialPlugin;
-
-impl Plugin for MaterialPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugin(RonAssetPlugin::<Materials>::new(&["materials.ron"]))
-            .add_asset::<Materials>()
-            .add_state::<MaterialsState>()
-            .add_system(load_materials.in_schedule(OnEnter(MaterialsState::Loading)))
-            .add_system(setup_materials.run_if(in_state(MaterialsState::Loading)));
     }
 }

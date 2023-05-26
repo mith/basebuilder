@@ -1,5 +1,21 @@
 use bevy::prelude::*;
 
+pub(crate) struct HealthPlugin;
+
+impl Plugin for HealthPlugin {
+    fn build(&self, app: &mut App) {
+        app.register_type::<Health>()
+            .add_event::<HealthDamageEvent>()
+            .add_systems(
+                (update_health, despawn_dead_entities)
+                    .chain()
+                    .in_set(HealthSet),
+            );
+    }
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct HealthSet;
 #[derive(Component, Reflect)]
 pub(crate) struct Health {
     pub(crate) value: u32,
@@ -26,21 +42,5 @@ fn despawn_dead_entities(mut commands: Commands, mut health_query: Query<(Entity
         if health.value == 0 {
             commands.entity(entity).despawn_recursive();
         }
-    }
-}
-
-#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct HealthSet;
-pub(crate) struct HealthPlugin;
-
-impl Plugin for HealthPlugin {
-    fn build(&self, app: &mut App) {
-        app.register_type::<Health>()
-            .add_event::<HealthDamageEvent>()
-            .add_systems(
-                (update_health, despawn_dead_entities)
-                    .chain()
-                    .in_set(HealthSet),
-            );
     }
 }

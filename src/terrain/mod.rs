@@ -19,6 +19,37 @@ use crate::{app_state::AppState, material::MaterialProperties, terrain_settings:
 use self::generate::{generate_terrain, TerrainGenerator};
 
 pub(crate) use self::terrain_params::TerrainParams;
+pub(crate) struct TerrainPlugin;
+
+impl Plugin for TerrainPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_event::<TileDamageEvent>()
+            .add_event::<TileDestroyedEvent>()
+            .add_state::<TerrainState>()
+            .add_system(setup_terrain.in_schedule(OnEnter(AppState::Game)))
+            .add_system(
+                spawn_terrain
+                    .run_if(in_state(TerrainState::Generating))
+                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(TerrainSet),
+            )
+            .add_systems(
+                (update_terrain, apply_system_buffers)
+                    .chain()
+                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(TerrainSet)
+                    .in_set(TerrainUpdateSet)
+                    .distributive_run_if(in_state(TerrainState::Spawned)),
+            )
+            .add_systems(
+                (color_damage_tile, remove_destroyed_tiles)
+                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(TerrainSet)
+                    .distributive_run_if(in_state(TerrainState::Spawned))
+                    .after(TerrainUpdateSet),
+            );
+    }
+}
 
 #[derive(Component)]
 pub(crate) struct Terrain;
@@ -131,13 +162,6 @@ fn setup_terrain(
     let terrain_settings_clone = terrain_settings.clone();
     let task = thread_pool.spawn(async move {
         let region = generate_terrain(IVec2::new(0, 0), generator, terrain_settings_clone);
-        // let region = Array2::from_elem(
-        //     (
-        //         terrain_settings_clone.width as usize,
-        //         terrain_settings_clone.height as usize,
-        //     ),
-        //     1,
-        // );
         TerrainData(region)
     });
     let terrain_transform = Transform::from_translation(Vec3::new(
@@ -271,36 +295,4 @@ fn build_terrain_colliders(
         }
     }
     tile_colliders
-}
-
-pub(crate) struct TerrainPlugin;
-
-impl Plugin for TerrainPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_event::<TileDamageEvent>()
-            .add_event::<TileDestroyedEvent>()
-            .add_state::<TerrainState>()
-            .add_system(setup_terrain.in_schedule(OnEnter(AppState::Game)))
-            .add_system(
-                spawn_terrain
-                    .run_if(in_state(TerrainState::Generating))
-                    .in_set(OnUpdate(AppState::Game))
-                    .in_set(TerrainSet),
-            )
-            .add_systems(
-                (update_terrain, apply_system_buffers)
-                    .chain()
-                    .in_set(OnUpdate(AppState::Game))
-                    .in_set(TerrainSet)
-                    .in_set(TerrainUpdateSet)
-                    .distributive_run_if(in_state(TerrainState::Spawned)),
-            )
-            .add_systems(
-                (color_damage_tile, remove_destroyed_tiles)
-                    .in_set(OnUpdate(AppState::Game))
-                    .in_set(TerrainSet)
-                    .distributive_run_if(in_state(TerrainState::Spawned))
-                    .after(TerrainUpdateSet),
-            );
-    }
 }

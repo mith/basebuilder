@@ -6,10 +6,6 @@ use crate::{
 
 pub(crate) struct LoadPlugin;
 
-fn start_game(mut state: ResMut<NextState<AppState>>) {
-    state.set(AppState::Game);
-}
-
 impl Plugin for LoadPlugin {
     fn build(&self, app: &mut App) {
         app.add_system(
@@ -19,4 +15,8 @@ impl Plugin for LoadPlugin {
                 .run_if(in_state(TerrainSettingsState::Loaded)), // .run_if(in_state(ItemsState::Loaded)),
         );
     }
+}
+
+fn start_game(mut state: ResMut<NextState<AppState>>) {
+    state.set(AppState::Game);
 }

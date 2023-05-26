@@ -1,5 +1,13 @@
 use bevy::{input::mouse::MouseWheel, prelude::*, window::PrimaryWindow};
 
+pub struct PanZoomCamera2dPlugin;
+
+impl Plugin for PanZoomCamera2dPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems((camera_zoom, drag_camera));
+    }
+}
+
 #[derive(Component)]
 pub struct PanZoomCamera2d {
     pub zoom_speed: f32,
@@ -108,13 +116,5 @@ fn drag_camera(
         transform.translation =
             drag_start.camera_position - Vec3::new(diff.x, diff.y, 0.) * ortho.scale;
         transform.translation.z = z;
-    }
-}
-
-pub struct PanZoomCamera2dPlugin;
-
-impl Plugin for PanZoomCamera2dPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems((camera_zoom, drag_camera));
     }
 }

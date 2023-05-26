@@ -4,6 +4,25 @@ use bevy_common_assets::ron::RonAssetPlugin;
 
 use crate::material::MaterialProperties;
 
+pub(crate) struct TerrainSettingsPlugin;
+
+impl Plugin for TerrainSettingsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugin(RonAssetPlugin::<TerrainSettingsRaw>::new(&[
+            "terrain_settings.ron",
+        ]))
+        .register_type::<TerrainSettings>()
+        .add_asset::<TerrainSettingsRaw>()
+        .add_state::<TerrainSettingsState>()
+        .add_system(load_terrain_settings.in_schedule(OnEnter(TerrainSettingsState::Loading)))
+        .add_system(
+            setup_terrain_settings
+                .run_if(in_state(TerrainSettingsState::Loading))
+                .run_if(resource_exists::<MaterialProperties>()),
+        );
+    }
+}
+
 #[derive(serde::Deserialize, Clone, TypeUuid)]
 #[uuid = "66ab7e1f-9767-4d9a-a3eb-db238bc75603"]
 struct TerrainSettingsRaw {
@@ -64,24 +83,5 @@ fn setup_terrain_settings(
             seed: terrain_settings.seed,
         });
         state.set(TerrainSettingsState::Loaded);
-    }
-}
-
-pub(crate) struct TerrainSettingsPlugin;
-
-impl Plugin for TerrainSettingsPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugin(RonAssetPlugin::<TerrainSettingsRaw>::new(&[
-            "terrain_settings.ron",
-        ]))
-        .register_type::<TerrainSettings>()
-        .add_asset::<TerrainSettingsRaw>()
-        .add_state::<TerrainSettingsState>()
-        .add_system(load_terrain_settings.in_schedule(OnEnter(TerrainSettingsState::Loading)))
-        .add_system(
-            setup_terrain_settings
-                .run_if(in_state(TerrainSettingsState::Loading))
-                .run_if(resource_exists::<MaterialProperties>()),
-        );
     }
 }

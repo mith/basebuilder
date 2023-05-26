@@ -12,6 +12,29 @@ use crate::{
     terrain_settings::TerrainSettings,
 };
 
+pub(crate) struct HoveredTilePlugin;
+
+impl Plugin for HoveredTilePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(setup_hovered_layer.in_schedule(OnEnter(AppState::Game)))
+            .add_systems(
+                (
+                    hovered_tile,
+                    apply_system_buffers,
+                    highlight_hovered_tile,
+                    unhighlight_hovered_tile,
+                )
+                    .chain()
+                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(HoveredTileSet)
+                    .after(TerrainSet),
+            );
+    }
+}
+
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub(crate) struct HoveredTileSet;
+
 #[derive(Component)]
 struct HoverLayer;
 
@@ -128,28 +151,5 @@ fn unhighlight_hovered_tile(
             commands.entity(hovertile_entity).despawn_recursive();
             hovertile_storage.remove(&destroyed_tile.tile_pos);
         }
-    }
-}
-
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct HoveredTileSet;
-
-pub(crate) struct HoveredTilePlugin;
-
-impl Plugin for HoveredTilePlugin {
-    fn build(&self, app: &mut App) {
-        app.add_system(setup_hovered_layer.in_schedule(OnEnter(AppState::Game)))
-            .add_systems(
-                (
-                    hovered_tile,
-                    apply_system_buffers,
-                    highlight_hovered_tile,
-                    unhighlight_hovered_tile,
-                )
-                    .chain()
-                    .in_set(OnUpdate(AppState::Game))
-                    .in_set(HoveredTileSet)
-                    .after(TerrainSet),
-            );
     }
 }

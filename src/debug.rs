@@ -5,6 +5,23 @@ use bevy_rapier2d::render::{DebugRenderContext, RapierDebugRenderPlugin};
 
 use crate::pan_zoom_camera2d::{PanZoomCamera2d, PanZoomCamera2dBundle};
 
+pub(crate) struct DebugPlugin;
+
+impl Plugin for DebugPlugin {
+    fn build(&self, app: &mut App) {
+        #[cfg(feature = "inspector")]
+        app.add_plugin(WorldInspectorPlugin::default().run_if(resource_exists::<Inspector>()));
+
+        app.add_plugin(RapierDebugRenderPlugin {
+            enabled: false,
+            ..default()
+        })
+        .add_system(toggle_physics_debug)
+        .add_system(toggle_freelook_camera)
+        .add_system(toggle_inspector);
+    }
+}
+
 #[derive(Resource)]
 struct Inspector;
 
@@ -55,22 +72,5 @@ fn toggle_freelook_camera(
         } else {
             spawn_freelook_camera(commands);
         }
-    }
-}
-
-pub(crate) struct DebugPlugin;
-
-impl Plugin for DebugPlugin {
-    fn build(&self, app: &mut App) {
-        #[cfg(feature = "inspector")]
-        app.add_plugin(WorldInspectorPlugin::default().run_if(resource_exists::<Inspector>()));
-
-        app.add_plugin(RapierDebugRenderPlugin {
-            enabled: false,
-            ..default()
-        })
-        .add_system(toggle_physics_debug)
-        .add_system(toggle_freelook_camera)
-        .add_system(toggle_inspector);
     }
 }

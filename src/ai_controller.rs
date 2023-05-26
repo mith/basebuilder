@@ -1,7 +1,4 @@
-use bevy::{
-    math::{Vec3Swizzles, Vec4Swizzles},
-    prelude::*,
-};
+use bevy::{math::Vec3Swizzles, prelude::*};
 
 use crate::{
     climbable::ClimbableMap,
@@ -9,6 +6,22 @@ use crate::{
     pathfinding::find_path,
     terrain::{Terrain, TerrainParams},
 };
+
+pub(crate) struct AiControllerPlugin;
+
+impl Plugin for AiControllerPlugin {
+    fn build(&self, app: &mut App) {
+        app.register_type::<MoveTo>().add_systems(
+            (update_target, move_to_target, move_to_removed)
+                .chain()
+                .in_set(AiControllerSet)
+                .before(MovementSet),
+        );
+    }
+}
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+pub(crate) struct AiControllerSet;
 
 #[derive(Component)]
 pub(crate) struct AiControlled;
@@ -92,21 +105,5 @@ fn move_to_removed(mut removed: RemovedComponents<MoveTo>, mut target_query: Que
         if let Ok(mut target) = target_query.get_mut(entity) {
             target.move_direction = None;
         }
-    }
-}
-
-#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-pub(crate) struct AiControllerSet;
-
-pub(crate) struct AiControllerPlugin;
-
-impl Plugin for AiControllerPlugin {
-    fn build(&self, app: &mut App) {
-        app.register_type::<MoveTo>().add_systems(
-            (update_target, move_to_target, move_to_removed)
-                .chain()
-                .in_set(AiControllerSet)
-                .before(MovementSet),
-        );
     }
 }

@@ -6,6 +6,21 @@ use crate::{
     movement::Walker,
 };
 
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub(crate) struct CreepSet;
+
+pub(crate) struct CreepPlugin;
+
+impl Plugin for CreepPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<CreepSpawnTimer>().add_system(
+            spawn_creep
+                .in_schedule(OnEnter(AppState::Game))
+                .in_set(CreepSet),
+        );
+    }
+}
+
 #[derive(Component)]
 pub(crate) struct Creep;
 
@@ -45,20 +60,5 @@ fn spawn_creep(
             Collider::round_cuboid(5., 5., 0.01),
             Gravity,
         ));
-    }
-}
-
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct CreepSet;
-
-pub(crate) struct CreepPlugin;
-
-impl Plugin for CreepPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<CreepSpawnTimer>().add_system(
-            spawn_creep
-                .in_schedule(OnEnter(AppState::Game))
-                .in_set(CreepSet),
-        );
     }
 }

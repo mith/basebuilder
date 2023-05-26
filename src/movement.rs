@@ -1,11 +1,19 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 
-use bevy_rapier2d::prelude::{
-    KinematicCharacterController, KinematicCharacterControllerOutput, QueryFilter, RapierContext,
-    RayIntersection,
-};
+use bevy_rapier2d::prelude::{KinematicCharacterController, KinematicCharacterControllerOutput};
 
 use crate::{climbable::ClimbableMap, gravity::Gravity, terrain::TerrainParams};
+
+pub(crate) struct MovementPlugin;
+
+impl Plugin for MovementPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems((walk, climb).in_set(MovementSet));
+    }
+}
+
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub(crate) struct MovementSet;
 
 #[derive(Component, Default)]
 pub(crate) struct Walker {
@@ -78,68 +86,5 @@ fn climb(
                     .insert(Gravity);
             }
         }
-    }
-}
-
-#[derive(Component)]
-pub(crate) struct Hands;
-
-#[derive(Component, Default)]
-pub(crate) struct Aim {
-    pub(crate) aim_direction: Option<f32>,
-}
-
-#[derive(Component)]
-pub(crate) struct AimingAt {
-    pub(crate) target: Entity,
-    pub(crate) intersection: RayIntersection,
-}
-
-fn aim(
-    mut commands: Commands,
-    mut hands_query: Query<(&mut Transform, &Parent), (With<Hands>, Without<Aim>)>,
-    aimer_query: Query<(&Aim, &Transform, Entity)>,
-    rapier_context: Res<RapierContext>,
-) {
-    for (mut hands_transform, parent) in &mut hands_query {
-        let Ok((input, player_transform, player_entity)) = aimer_query.get(parent.get()) else {
-            continue;
-        };
-
-        if let Some(aim_direction) = input.aim_direction {
-            let rotation = Quat::from_rotation_z(aim_direction);
-            hands_transform.rotation = rotation;
-
-            let max_distance = 1000.;
-            let filter = QueryFilter::default().exclude_collider(player_entity);
-            if let Some((hit_entity, intersection)) = rapier_context.cast_ray_and_get_normal(
-                player_transform.translation.xy(),
-                hands_transform
-                    .rotation
-                    .mul_vec3(Vec3::new(1., 0., 0.))
-                    .xy(),
-                max_distance,
-                true,
-                filter,
-            ) {
-                commands.entity(player_entity).insert(AimingAt {
-                    target: hit_entity,
-                    intersection,
-                });
-            } else {
-                commands.entity(player_entity).remove::<AimingAt>();
-            };
-        }
-    }
-}
-
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct MovementSet;
-
-pub(crate) struct MovementPlugin;
-
-impl Plugin for MovementPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems((walk, aim).in_set(MovementSet));
     }
 }

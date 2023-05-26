@@ -7,6 +7,27 @@ use bevy_ecs_tilemap::{
 
 use crate::{app_state::AppState, terrain::TileDestroyedEvent, terrain_settings::TerrainSettings};
 
+pub(crate) struct DesignationLayerPlugin;
+
+impl Plugin for DesignationLayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(setup_designation_layer.in_schedule(OnEnter(AppState::Game)))
+            .add_systems(
+                (
+                    apply_system_buffers,
+                    highlight_designation_tile,
+                    unhighlight_designation_tile,
+                )
+                    .chain()
+                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(DesignationLayerSet),
+            );
+    }
+}
+
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub(crate) struct DesignationLayerSet;
+
 #[derive(Component)]
 struct HoverLayer;
 
@@ -99,26 +120,5 @@ fn unhighlight_designation_tile(
             commands.entity(hover_tile_entity).despawn_recursive();
             tile_storage.remove(&destroyed_tile.tile_pos);
         }
-    }
-}
-
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct DesignationLayerSet;
-
-pub(crate) struct DesignationLayerPlugin;
-
-impl Plugin for DesignationLayerPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_system(setup_designation_layer.in_schedule(OnEnter(AppState::Game)))
-            .add_systems(
-                (
-                    apply_system_buffers,
-                    highlight_designation_tile,
-                    unhighlight_designation_tile,
-                )
-                    .chain()
-                    .in_set(OnUpdate(AppState::Game))
-                    .in_set(DesignationLayerSet),
-            );
     }
 }

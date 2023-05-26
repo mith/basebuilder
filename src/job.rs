@@ -1,8 +1,4 @@
-use bevy::{
-    math::{Vec3Swizzles, Vec4Swizzles},
-    prelude::*,
-    utils::HashMap,
-};
+use bevy::{math::Vec3Swizzles, prelude::*, utils::HashMap};
 use bevy_ecs_tilemap::tiles::TilePos;
 use bevy_rapier2d::prelude::KinematicCharacterControllerOutput;
 
