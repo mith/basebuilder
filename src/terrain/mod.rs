@@ -1,4 +1,5 @@
 mod generate;
+mod terrain_params;
 
 use std::sync::Arc;
 
@@ -16,6 +17,8 @@ use ndarray::prelude::*;
 use crate::{app_state::AppState, material::MaterialProperties, terrain_settings::TerrainSettings};
 
 use self::generate::{generate_terrain, TerrainGenerator};
+
+pub(crate) use self::terrain_params::TerrainParams;
 
 #[derive(Component)]
 pub(crate) struct Terrain;

@@ -3,9 +3,12 @@ use bevy::prelude::*;
 
 use app_state::AppStatePlugin;
 use bevy_ecs_tilemap::TilemapPlugin;
+use bevy_egui::EguiPlugin;
 use bevy_proto::prelude::ProtoPlugin;
 use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
-use creep::CreepPlugin;
+use build::BuildPlugin;
+use climbable::ClimbablePlugin;
+
 use cursor_position::CursorPositionPlugin;
 use debug::DebugPlugin;
 use designation_layer::DesignationLayerPlugin;
@@ -25,9 +28,12 @@ use pan_zoom_camera2d::PanZoomCamera2dPlugin;
 use structure::StructurePlugin;
 use terrain::TerrainPlugin;
 use terrain_settings::TerrainSettingsPlugin;
+use toolbar::ToolbarPlugin;
 
 mod ai_controller;
 mod app_state;
+mod build;
+mod climbable;
 mod crafting;
 mod creep;
 mod cursor_position;
@@ -52,6 +58,7 @@ mod structure;
 mod stuck;
 mod terrain;
 mod terrain_settings;
+mod toolbar;
 
 fn main() {
     let mut app = App::new();
@@ -76,7 +83,8 @@ fn main() {
     // Add third-party plugins
     app.add_plugin(TilemapPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.))
-        .add_plugin(ProtoPlugin::new());
+        .add_plugin(ProtoPlugin::new())
+        .add_plugin(EguiPlugin);
 
     // Add crate plugins
     app.add_plugin(AppStatePlugin)
@@ -94,13 +102,16 @@ fn main() {
         .add_plugin(GravityPlugin)
         .add_plugin(HealthPlugin)
         .add_plugin(MovementPlugin)
+        .add_plugin(ClimbablePlugin)
         .add_plugin(HitPlugin)
         .add_plugin(StructurePlugin)
         .add_plugin(MainCameraPlugin)
         .add_plugin(DwarfPlugin)
         .add_plugin(JobPlugin)
         .add_plugin(DigPlugin)
-        .add_plugin(DesignationLayerPlugin);
+        .add_plugin(DesignationLayerPlugin)
+        .add_plugin(BuildPlugin)
+        .add_plugin(ToolbarPlugin);
 
     app.run();
 }

@@ -1,0 +1,55 @@
+use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy_egui::EguiContexts;
+
+use crate::build::BuildToolState;
+use crate::dig::DigToolState;
+
+pub struct ToolbarPlugin;
+
+impl Plugin for ToolbarPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(toolbar);
+    }
+}
+
+enum Tool {
+    Dig,
+    Build,
+}
+
+#[derive(SystemParam)]
+struct ToolStates<'w> {
+    dig_tool_next_state: ResMut<'w, NextState<DigToolState>>,
+    build_tool_next_state: ResMut<'w, NextState<BuildToolState>>,
+}
+
+fn toolbar(mut contexts: EguiContexts, mut tool_states: ToolStates) {
+    egui::Window::new("Toolbar").show(contexts.ctx_mut(), |ui| {
+        if ui.button("Dig").clicked() {
+            switch_to_tool(&mut tool_states, Tool::Dig)
+        }
+        if ui.button("Build").clicked() {
+            switch_to_tool(&mut tool_states, Tool::Build)
+        }
+    });
+}
+
+fn clear_active_tool(tool_states: &mut ToolStates) {
+    tool_states.dig_tool_next_state.set(DigToolState::Inactive);
+    tool_states
+        .build_tool_next_state
+        .set(BuildToolState::Inactive);
+}
+
+fn switch_to_tool(tool_states: &mut ToolStates, tool: Tool) {
+    clear_active_tool(tool_states);
+
+    match tool {
+        Tool::Dig => tool_states
+            .dig_tool_next_state
+            .set(DigToolState::Designating),
+        Tool::Build => tool_states
+            .build_tool_next_state
+            .set(BuildToolState::Placing),
+    }
+}

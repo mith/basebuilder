@@ -1,8 +1,11 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
+
 use bevy_rapier2d::prelude::{
     KinematicCharacterController, KinematicCharacterControllerOutput, QueryFilter, RapierContext,
     RayIntersection,
 };
+
+use crate::{climbable::ClimbableMap, gravity::Gravity, terrain::TerrainParams};
 
 #[derive(Component, Default)]
 pub(crate) struct Walker {
@@ -13,6 +16,12 @@ pub(crate) struct Jumper {
     pub(crate) jump_timer: Option<Timer>,
     pub(crate) jump: bool,
 }
+
+#[derive(Component)]
+pub(crate) struct Climber;
+
+#[derive(Component)]
+pub(crate) struct Climbing;
 
 fn walk(
     mut dude_query: Query<(
@@ -42,6 +51,33 @@ fn walk(
         controller.translation = controller.translation.map_or(move_direction, |t| {
             Some(t + move_direction.unwrap_or_default())
         });
+    }
+}
+
+fn climb(
+    mut commands: Commands,
+    mut climber_query: Query<(Entity, &GlobalTransform), With<Climber>>,
+    climbable_map_query: Query<&ClimbableMap>,
+    terrain: TerrainParams,
+) {
+    for (climber_entity, climber_transform) in &mut climber_query {
+        for climbable_map in &climbable_map_query {
+            let climber_tile_pos = terrain
+                .global_to_tile_pos(climber_transform.translation().xy())
+                .unwrap();
+
+            if climbable_map.is_climbable(climber_tile_pos.into()) {
+                commands
+                    .entity(climber_entity)
+                    .insert(Climbing)
+                    .remove::<Gravity>();
+            } else {
+                commands
+                    .entity(climber_entity)
+                    .remove::<Climbing>()
+                    .insert(Gravity);
+            }
+        }
     }
 }
 

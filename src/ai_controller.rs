@@ -2,13 +2,12 @@ use bevy::{
     math::{Vec3Swizzles, Vec4Swizzles},
     prelude::*,
 };
-use bevy_ecs_tilemap::prelude::{SquarePos, TilemapGridSize};
-use pathfinding::prelude::astar;
 
 use crate::{
+    climbable::ClimbableMap,
     movement::{MovementSet, Walker},
     pathfinding::find_path,
-    terrain::{Terrain, TerrainData},
+    terrain::{Terrain, TerrainParams},
 };
 
 #[derive(Component)]
@@ -25,65 +24,52 @@ pub(crate) struct Path {
 }
 
 fn move_to_target(
-    mut target_query: Query<(&MoveTo, &mut Walker, &Transform), With<AiControlled>>,
-    terrain_query: Query<(&GlobalTransform, &TerrainData, &TilemapGridSize), With<Terrain>>,
+    mut target_query: Query<(&MoveTo, &mut Walker, &GlobalTransform), With<AiControlled>>,
+    terrain: TerrainParams,
+    climbable_map: Query<&ClimbableMap, With<Terrain>>,
 ) {
-    let Ok((terrain_global_transform, terrain_data, tilemap_grid_size)) = terrain_query.get_single() else { return; };
-    for (target, mut walker, walker_transform) in &mut target_query {
-        let target_tile_pos_vec4 = terrain_global_transform.compute_matrix().inverse()
-            * Vec4::new(target.position.x, target.position.y, 0., 1.);
-        let target_tile_pos = (target_tile_pos_vec4 / tilemap_grid_size.x).xy().as_uvec2();
+    let Ok(climbable_map) = climbable_map.get_single() else { return; };
+    let Ok(terrain_data) = terrain.terrain_data_query.get_single() else { return; };
+    for (target, mut walker, walker_global_transform) in &mut target_query {
+        let target_tile_pos = terrain.global_to_tile_pos(target.position).unwrap();
+        let walker_tile_pos = terrain
+            .global_to_tile_pos(walker_global_transform.translation().xy())
+            .unwrap();
 
-        let walker_pos_in_terrain_transform = terrain_global_transform.compute_matrix().inverse()
-            * Vec4::new(
-                walker_transform.translation.x,
-                walker_transform.translation.y,
-                0.,
-                1.,
-            );
+        let path = find_path(
+            terrain_data,
+            Some(climbable_map),
+            walker_tile_pos.into(),
+            target_tile_pos.into(),
+        );
 
-        let walker_square_pos =
-            SquarePos::from_world_pos(&walker_pos_in_terrain_transform.xy(), tilemap_grid_size);
-
-        let walker_tile_pos = UVec2::new(walker_square_pos.x as u32, walker_square_pos.y as u32);
-
-        let path = find_path(terrain_data, walker_tile_pos, target_tile_pos);
-
-        if let Some(next_tile) = path.get(1) {
-            let next_tile_world_pos = terrain_global_transform.compute_matrix()
-                * Vec4::new(
-                    next_tile.x as f32 * tilemap_grid_size.x,
-                    next_tile.y as f32 * tilemap_grid_size.y,
+        if let Some(next_tile) = path.get(1).copied() {
+            let next_tile_world_pos = terrain.tile_to_global_pos(next_tile.into());
+            let walker_tile_world_pos = terrain.tile_to_global_pos(walker_tile_pos.into());
+            // if next tile position is above or below walker position, first move to the center of the current tile
+            let distance_from_center =
+                (walker_global_transform.translation().x - walker_tile_world_pos.x).abs();
+            if next_tile.y != walker_tile_pos.y
+                && next_tile.x == walker_tile_pos.x
+                && distance_from_center > 1.
+            {
+                let distance = Vec2::new(
+                    walker_tile_world_pos.x - walker_global_transform.translation().x,
                     0.,
-                    1.,
                 );
-            let walker_world_pos = terrain_global_transform.compute_matrix()
-                * Vec4::new(
-                    walker_tile_pos.x as f32 * tilemap_grid_size.x,
-                    walker_tile_pos.y as f32 * tilemap_grid_size.y,
-                    0.,
-                    1.,
+                walker.move_direction = Some(distance.normalize());
+            } else {
+                let distance = next_tile_world_pos - walker_tile_world_pos;
+                walker.move_direction = Some(distance.normalize());
+            }
+        } else if let Some(last_tile) = path.last().copied() {
+            let next_tile_world_pos = terrain.tile_to_global_pos(last_tile.into());
+            let walker_tile_world_pos = terrain.tile_to_global_pos(walker_tile_pos.into());
+            let distance = next_tile_world_pos
+                - Vec2::new(
+                    walker_global_transform.translation().x,
+                    walker_tile_world_pos.y,
                 );
-            let distance = next_tile_world_pos.xy()
-                - Vec2::new(walker_transform.translation.x, walker_world_pos.y);
-            walker.move_direction = Some(distance.normalize());
-        } else if let Some(last_tile) = path.last() {
-            let next_tile_world_pos = terrain_global_transform.compute_matrix()
-                * Vec4::new(
-                    last_tile.x as f32 * tilemap_grid_size.x,
-                    last_tile.y as f32 * tilemap_grid_size.y,
-                    0.,
-                    1.,
-                );
-            let walker_world_pos = terrain_global_transform.compute_matrix()
-                * Vec4::new(
-                    walker_tile_pos.x as f32 * tilemap_grid_size.x,
-                    walker_tile_pos.y as f32 * tilemap_grid_size.y,
-                    0.,
-                    1.,
-                );
-            let distance = next_tile_world_pos.xy()
-                - Vec2::new(walker_transform.translation.x, walker_world_pos.y);
             walker.move_direction = Some(distance.normalize());
         } else {
             walker.move_direction = None;

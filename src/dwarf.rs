@@ -85,7 +85,7 @@ fn spawn_dwarf(
         Dwarf,
         Name::new("Dwarf"),
         MaterialMesh2dBundle {
-            transform: Transform::from_xyz(x, y, 2.),
+            transform: Transform::from_xyz(x, y, 3.),
             material: materials.add(Color::WHITE.into()),
             mesh: meshes
                 .add(Mesh::from(shape::Quad::new(Vec2::new(12., 12.))))

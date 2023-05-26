@@ -1,8 +1,12 @@
-use bevy::{math::Vec4Swizzles, prelude::*, utils::HashMap};
-use bevy_ecs_tilemap::{prelude::TilemapTileSize, tiles::TilePos};
-use bevy_rapier2d::prelude::{KinematicCharacterController, KinematicCharacterControllerOutput};
+use bevy::{
+    math::{Vec3Swizzles, Vec4Swizzles},
+    prelude::*,
+    utils::HashMap,
+};
+use bevy_ecs_tilemap::tiles::TilePos;
+use bevy_rapier2d::prelude::KinematicCharacterControllerOutput;
 
-use crate::{ai_controller::MoveTo, terrain::Terrain};
+use crate::{ai_controller::MoveTo, terrain::TerrainParams};
 
 pub struct JobPlugin;
 
@@ -42,26 +46,19 @@ fn assign_job(
         (With<Job>, Without<AssignedTo>, With<Accessible>),
     >,
     worker_query: Query<(Entity, &GlobalTransform), (With<Worker>, Without<HasJob>)>,
-    terrain_query: Query<(&GlobalTransform, &TilemapTileSize), With<Terrain>>,
+    terrain: TerrainParams,
 ) {
     let mut available_workers = worker_query.iter().collect::<Vec<_>>();
     // Look for unnassigned jobs and assign them to the closest unnoccupied worker
     for (job_entity, job_tilepos, opt_blacklisted_workers) in &unassigned_job_query {
-        let (terrain_transform, tile_size) = terrain_query.single();
-        let job_translation = (terrain_transform.compute_matrix()
-            * Vec4::new(
-                job_tilepos.x as f32 * tile_size.x,
-                job_tilepos.y as f32 * tile_size.y,
-                0.,
-                1.,
-            ))
-        .xyz();
+        let job_world_pos = terrain.tile_to_global_pos(*job_tilepos);
         // find closest worker
         // first calculate distance to job for each worker and sort
         available_workers.sort_by(|(_, a), (_, b)| {
             a.translation()
-                .distance(job_translation)
-                .partial_cmp(&b.translation().distance(job_translation))
+                .xy()
+                .distance(job_world_pos)
+                .partial_cmp(&b.translation().xy().distance(job_world_pos))
                 .unwrap()
         });
 
@@ -69,7 +66,7 @@ fn assign_job(
             available_workers
                 .iter()
                 .enumerate()
-                .find(|(i, (worker_entity, _))| {
+                .find(|(_i, (worker_entity, _))| {
                     // check if worker has not been unassigned from this job earlier
                     if let Some(blacklisted_workers) = opt_blacklisted_workers {
                         if blacklisted_workers.0.contains_key(worker_entity) {
