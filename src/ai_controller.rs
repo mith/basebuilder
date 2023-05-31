@@ -1,22 +1,32 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 
 use crate::{
-    climbable::ClimbableMap,
-    movement::{MovementSet, Walker},
-    pathfinding::find_path,
-    terrain::{Terrain, TerrainParams},
+    gravity::GravitySet,
+    movement::{Climbing, Falling, MovementSet, Walker},
+    terrain::{TerrainParams, TerrainSet, TerrainState, TileDestroyedEvent},
 };
 
 pub(crate) struct AiControllerPlugin;
 
 impl Plugin for AiControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<MoveTo>().add_systems(
-            (update_target, move_to_target, move_to_removed)
-                .chain()
-                .in_set(AiControllerSet)
-                .before(MovementSet),
-        );
+        app.register_type::<MoveTo>()
+            .register_type::<Path>()
+            .add_systems(
+                (
+                    invalidate_paths,
+                    apply_system_buffers,
+                    update_target,
+                    move_to_target,
+                    move_to_removed,
+                )
+                    .chain()
+                    .in_set(AiControllerSet)
+                    .distributive_run_if(in_state(TerrainState::Spawned))
+                    .before(GravitySet)
+                    .before(MovementSet)
+                    .after(TerrainSet),
+            );
     }
 }
 
@@ -32,60 +42,73 @@ pub(crate) struct MoveTo {
     pub(crate) position: Vec2,
 }
 
-pub(crate) struct Path {
-    pub(crate) path: Vec<UVec2>,
-}
+#[derive(Component, Reflect)]
+pub(crate) struct Path(pub(crate) Vec<UVec2>);
 
 fn move_to_target(
-    mut target_query: Query<(&MoveTo, &mut Walker, &GlobalTransform), With<AiControlled>>,
+    mut target_query: Query<
+        (&mut Path, &mut Walker, &GlobalTransform),
+        (With<MoveTo>, With<AiControlled>, Without<Falling>),
+    >,
     terrain: TerrainParams,
-    climbable_map: Query<&ClimbableMap, With<Terrain>>,
 ) {
-    let Ok(climbable_map) = climbable_map.get_single() else { return; };
-    let Ok(terrain_data) = terrain.terrain_data_query.get_single() else { return; };
-    for (target, mut walker, walker_global_transform) in &mut target_query {
-        let target_tile_pos = terrain.global_to_tile_pos(target.position).unwrap();
+    for (mut path, mut walker, walker_global_transform) in &mut target_query {
         let walker_tile_pos = terrain
             .global_to_tile_pos(walker_global_transform.translation().xy())
             .unwrap();
-
-        let path = find_path(
-            terrain_data,
-            Some(climbable_map),
-            walker_tile_pos.into(),
-            target_tile_pos.into(),
-        );
-
-        if let Some(next_tile) = path.get(1).copied() {
-            let next_tile_world_pos = terrain.tile_to_global_pos(next_tile.into());
-            let walker_tile_world_pos = terrain.tile_to_global_pos(walker_tile_pos.into());
-            // if next tile position is above or below walker position, first move to the center of the current tile
-            let distance_from_center =
-                (walker_global_transform.translation().x - walker_tile_world_pos.x).abs();
-            if next_tile.y != walker_tile_pos.y
-                && next_tile.x == walker_tile_pos.x
-                && distance_from_center > 1.
-            {
+        // if within the center of the first tile in the path, remove it
+        if let Some(&first_tile) = path.0.first() {
+            let is_climbing =
+                walker_tile_pos.y != first_tile.y && walker_tile_pos.x == first_tile.x;
+            let first_tile_world_pos = terrain.tile_to_global_pos(first_tile.into());
+            if is_climbing {
                 let distance = Vec2::new(
-                    walker_tile_world_pos.x - walker_global_transform.translation().x,
+                    first_tile_world_pos.x - walker_global_transform.translation().x,
+                    first_tile_world_pos.y - walker_global_transform.translation().y,
+                );
+                if distance.length() < 1. {
+                    path.0.remove(0);
+                }
+            } else {
+                let distance = Vec2::new(
+                    first_tile_world_pos.x - walker_global_transform.translation().x,
                     0.,
+                );
+                if distance.length() < 1. {
+                    path.0.remove(0);
+                }
+            }
+        }
+
+        if let Some(&next_tile) = path.0.get(0) {
+            let is_climbing = walker_tile_pos.y != next_tile.y && walker_tile_pos.x == next_tile.x;
+            // when climbing, move to the center of the tile on both x and y axis
+            let next_tile_world_pos = terrain.tile_to_global_pos(next_tile.into());
+            if is_climbing {
+                let distance = Vec2::new(
+                    next_tile_world_pos.x - walker_global_transform.translation().x,
+                    next_tile_world_pos.y - walker_global_transform.translation().y,
                 );
                 walker.move_direction = Some(distance.normalize());
             } else {
-                let distance = next_tile_world_pos - walker_tile_world_pos;
+                let distance = Vec2::new(
+                    next_tile_world_pos.x - walker_global_transform.translation().x,
+                    0.,
+                );
                 walker.move_direction = Some(distance.normalize());
             }
-        } else if let Some(last_tile) = path.last().copied() {
-            let next_tile_world_pos = terrain.tile_to_global_pos(last_tile.into());
-            let walker_tile_world_pos = terrain.tile_to_global_pos(walker_tile_pos.into());
-            let distance = next_tile_world_pos
-                - Vec2::new(
-                    walker_global_transform.translation().x,
-                    walker_tile_world_pos.y,
-                );
-            walker.move_direction = Some(distance.normalize());
-        } else {
-            walker.move_direction = None;
+        } // else: path is empty, destination reached
+    }
+}
+
+fn invalidate_paths(
+    mut commands: Commands,
+    path_entity_query: Query<Entity, With<Path>>,
+    destroyed_tiles: EventReader<TileDestroyedEvent>,
+) {
+    if !destroyed_tiles.is_empty() {
+        for entity in &mut path_entity_query.iter() {
+            commands.entity(entity).remove::<Path>();
         }
     }
 }

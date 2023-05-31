@@ -1,14 +1,22 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 
-use bevy_rapier2d::prelude::{KinematicCharacterController, KinematicCharacterControllerOutput};
+use bevy_rapier2d::prelude::{
+    Collider, CollisionGroups, KinematicCharacterController, KinematicCharacterControllerOutput,
+    QueryFilter, RapierContext,
+};
 
-use crate::{climbable::ClimbableMap, gravity::Gravity, terrain::TerrainParams};
+use crate::{
+    climbable::ClimbableMap,
+    dwarf::DWARF_COLLISION_GROUP,
+    gravity::Gravity,
+    terrain::{TerrainParams, TERRAIN_COLLISION_GROUP},
+};
 
 pub(crate) struct MovementPlugin;
 
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems((walk, climb).in_set(MovementSet));
+        app.add_systems((walk, fall).in_set(MovementSet));
     }
 }
 
@@ -54,36 +62,51 @@ fn walk(
             }
         }
 
-        let move_direction = walker.move_direction.map(|dir| Vec2::new(dir.x, 0.));
+        let move_direction = walker.move_direction.map(|dir| Vec2::new(dir.x, dir.y));
 
-        controller.translation = controller.translation.map_or(move_direction, |t| {
-            Some(t + move_direction.unwrap_or_default())
-        });
+        controller.translation = controller
+            .translation
+            .map_or(move_direction, |translation| {
+                move_direction.map(|dir| translation + dir)
+            });
     }
 }
 
-fn climb(
+#[derive(Component)]
+pub(crate) struct Falling;
+
+fn fall(
     mut commands: Commands,
-    mut climber_query: Query<(Entity, &GlobalTransform), With<Climber>>,
+    rapier_context: Res<RapierContext>,
+    mut climber_query: Query<
+        (Entity, &mut KinematicCharacterController, &GlobalTransform),
+        With<Climber>,
+    >,
     climbable_map_query: Query<&ClimbableMap>,
     terrain: TerrainParams,
 ) {
-    for (climber_entity, climber_transform) in &mut climber_query {
+    for (climber_entity, mut controller, climber_transform) in &mut climber_query {
         for climbable_map in &climbable_map_query {
             let climber_tile_pos = terrain
                 .global_to_tile_pos(climber_transform.translation().xy())
                 .unwrap();
 
-            if climbable_map.is_climbable(climber_tile_pos.into()) {
-                commands
-                    .entity(climber_entity)
-                    .insert(Climbing)
-                    .remove::<Gravity>();
+            let shape_pos = climber_transform.translation().xy() - Vec2::new(0., 6.);
+            let shape_rot = 0.;
+            let shape = Collider::cuboid(6., 0.2);
+            let filter = QueryFilter::default().groups(CollisionGroups::new(
+                DWARF_COLLISION_GROUP,
+                TERRAIN_COLLISION_GROUP,
+            ));
+            let is_grounded = rapier_context
+                .intersection_with_shape(shape_pos, shape_rot, &shape, filter)
+                .is_some();
+
+            if !climbable_map.is_climbable(climber_tile_pos.into()) && !is_grounded {
+                commands.entity(climber_entity).insert(Falling);
+                controller.translation = Some(Vec2::new(0., -1.));
             } else {
-                commands
-                    .entity(climber_entity)
-                    .remove::<Climbing>()
-                    .insert(Gravity);
+                commands.entity(climber_entity).remove::<Falling>();
             }
         }
     }

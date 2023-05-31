@@ -4,12 +4,12 @@ use bevy_ecs_tilemap::{
 };
 
 use crate::{
-    ai_controller::MoveTo,
+    ai_controller::{MoveTo, Path},
     climbable::ClimbableMap,
     designation_layer::Designated,
     hovered_tile::HoveredTile,
     job::{Accessible, AssignedTo, HasJob, Job, Worker},
-    pathfinding::find_path,
+    pathfinding::{can_move_to, can_stand_or_climb, find_path},
     terrain::{
         Terrain, TerrainData, TerrainParams, TerrainSet, TileDamageEvent, TileDestroyedEvent,
     },
@@ -21,6 +21,7 @@ impl Plugin for DigPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Digging>()
             .register_type::<JobTimer>()
+            .register_type::<DigToolState>()
             .add_state::<DigToolState>()
             .add_systems((
                 designate_dig.run_if(state_exists_and_equals(DigToolState::Designating)),
@@ -35,7 +36,7 @@ impl Plugin for DigPlugin {
 #[derive(Component)]
 pub struct DigTarget;
 
-#[derive(States, Default, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(States, Default, Reflect, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum DigToolState {
     #[default]
     Inactive,
@@ -58,10 +59,10 @@ fn designate_dig(
 
 fn check_accessibility(
     mut commands: Commands,
-    terrain_tilemap_query: Query<(&TerrainData, &TilemapSize), With<Terrain>>,
+    terrain_tilemap_query: Query<(&TerrainData, &TilemapSize, &ClimbableMap), With<Terrain>>,
     job_query: Query<(Entity, &TilePos), (With<DigTarget>, With<Job>)>,
 ) {
-    for (terrain_data, tilemap_size) in &terrain_tilemap_query {
+    for (terrain_data, tilemap_size, _ClimbableMap) in &terrain_tilemap_query {
         for (job_entity, job_tile_pos) in &job_query {
             // check if any of the tiles to the side and top of the job tile are accessible
             let tile_pos_up = job_tile_pos
@@ -78,9 +79,8 @@ fn check_accessibility(
 
             let accessible = all_tile_positions.iter().any(|pos| {
                 terrain_data
-                    .0
-                    .get([pos.x as usize, pos.y as usize])
-                    .map_or(false, |tile| *tile == 0)
+                    .get_tile(pos.into())
+                    .map_or(false, |tile| tile == 0)
             });
             if accessible {
                 commands.entity(job_entity).insert(Accessible);
@@ -100,13 +100,13 @@ pub struct JobTimer(pub Timer);
 fn dig(
     mut commands: Commands,
     assigned_dig_job_query: Query<(Entity, &TilePos, &AssignedTo), (With<Job>, With<DigTarget>)>,
-    worker_query: Query<&GlobalTransform, (With<Worker>, Without<Digging>)>,
+    worker_query: Query<(&GlobalTransform, Option<&Path>), (With<Worker>, Without<Digging>)>,
     terrain: TerrainParams,
     climbable_map: Query<&ClimbableMap, With<Terrain>>,
 ) {
     // Make a walk walk to the dig target and start digging
     for (dig_job_entity, dig_target_tile_pos, assigned_to) in &assigned_dig_job_query {
-        if let Ok(worker_transform) = worker_query.get(assigned_to.entity) {
+        if let Ok((worker_transform, path)) = worker_query.get(assigned_to.entity) {
             let climbable_map = climbable_map.single();
             let terrain_data = terrain.terrain_data_query.single();
             let tile_global_position = terrain.tile_to_global_pos(*dig_target_tile_pos);
@@ -117,52 +117,59 @@ fn dig(
                 .distance(tile_global_position)
                 < 26.
             {
-                commands.entity(assigned_to.entity).remove::<MoveTo>();
+                commands
+                    .entity(assigned_to.entity)
+                    .remove::<MoveTo>()
+                    .remove::<Path>();
                 commands.entity(assigned_to.entity).insert((
                     Digging(dig_job_entity),
                     JobTimer(Timer::from_seconds(1., TimerMode::Repeating)),
                 ));
-            } else {
+            } else if path.is_none() {
                 let walker_tile_pos = terrain
                     .global_to_tile_pos(worker_transform.translation().xy())
                     .unwrap();
 
+                let map_size: TilemapSize = terrain_data.map_size().into();
+
                 // check if there are any tiles near the dig target that are accessible
                 // and if so, make the worker move to them
-                for x in -1..=1i32 {
-                    for y in -1..=1i32 {
-                        if x == 0 && y == 0 {
-                            continue;
-                        }
-                        let p = TilePos::new(
-                            (dig_target_tile_pos.x as i32 + x) as u32,
-                            (dig_target_tile_pos.y as i32 + y) as u32,
-                        );
-                        let p_is_air = terrain.get_tile(p).map_or(false, |tile| tile == 0);
-                        let ground_underneath_p = terrain
-                            .get_tile(TilePos::new(p.x as u32, p.y as u32 - 1))
-                            .map_or(false, |tile| tile != 0);
-                        let p_is_next_to_target = (p.x as i32 - dig_target_tile_pos.x as i32).abs()
-                            <= 1
-                            && (p.y as i32 - dig_target_tile_pos.y as i32).abs() <= 1;
-                        let path_to_p = find_path(
-                            &terrain_data,
-                            Some(climbable_map),
-                            walker_tile_pos.into(),
-                            UVec2::new(p.x, p.y),
-                        );
-                        if p_is_air
-                            && ground_underneath_p
-                            && p_is_next_to_target
-                            && !path_to_p.is_empty()
-                        {
-                            let tile_global_position = terrain.tile_to_global_pos(p);
-                            commands.entity(assigned_to.entity).insert(MoveTo {
+                for direction in [
+                    SquareDirection::North,
+                    SquareDirection::NorthEast,
+                    SquareDirection::East,
+                    SquareDirection::SouthEast,
+                    SquareDirection::South,
+                    SquareDirection::SouthWest,
+                    SquareDirection::West,
+                    SquareDirection::NorthWest,
+                ]
+                .iter()
+                {
+                    let Some(target_tile_pos) = dig_target_tile_pos.square_offset(direction, &map_size) else {
+                        continue;
+                    };
+
+                    let can_stand_or_climb_in_target =
+                        can_stand_or_climb(terrain_data, Some(climbable_map), target_tile_pos);
+
+                    let path_to_target_tile = find_path(
+                        terrain_data,
+                        Some(climbable_map),
+                        walker_tile_pos.into(),
+                        target_tile_pos.into(),
+                    );
+
+                    if can_stand_or_climb_in_target && !path_to_target_tile.is_empty() {
+                        let tile_global_position = terrain.tile_to_global_pos(target_tile_pos);
+                        commands.entity(assigned_to.entity).insert((
+                            MoveTo {
                                 entity: Some(dig_job_entity),
                                 position: tile_global_position,
-                            });
-                            return;
-                        }
+                            },
+                            Path(path_to_target_tile),
+                        ));
+                        break;
                     }
                 }
             }
@@ -211,5 +218,6 @@ fn remove_digging_job(commands: &mut Commands, unassigned_worker_entity: Entity)
         .remove::<Digging>()
         .remove::<JobTimer>()
         .remove::<HasJob>()
-        .remove::<MoveTo>();
+        .remove::<MoveTo>()
+        .remove::<Path>();
 }

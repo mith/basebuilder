@@ -65,7 +65,20 @@ pub enum TerrainState {
 }
 
 #[derive(Component)]
-pub struct TerrainData(pub Array2<u16>);
+pub struct TerrainData(Array2<u16>);
+
+impl TerrainData {
+    pub fn get_tile(&self, tile_pos: UVec2) -> Option<u16> {
+        self.0
+            .get([tile_pos.x as usize, tile_pos.y as usize])
+            .copied()
+    }
+
+    pub fn map_size(&self) -> UVec2 {
+        let shape = self.0.shape();
+        UVec2::new(shape[0] as u32, shape[1] as u32)
+    }
+}
 
 #[derive(Component)]
 #[component(storage = "SparseSet")]

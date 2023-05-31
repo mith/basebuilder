@@ -1,9 +1,13 @@
+mod pathfinding;
+
 use bevy::prelude::*;
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier2d::render::{DebugRenderContext, RapierDebugRenderPlugin};
 
 use crate::pan_zoom_camera2d::{PanZoomCamera2d, PanZoomCamera2dBundle};
+
+use self::pathfinding::{PathfindingDebugPlugin, PathfindingDebugState};
 
 pub(crate) struct DebugPlugin;
 
@@ -16,11 +20,21 @@ impl Plugin for DebugPlugin {
             enabled: false,
             ..default()
         })
-        .add_system(toggle_physics_debug)
-        .add_system(toggle_freelook_camera)
-        .add_system(toggle_inspector);
+        .add_systems(
+            (
+                toggle_physics_debug,
+                toggle_freelook_camera,
+                toggle_inspector,
+                toggle_pathfinding_debug,
+            )
+                .in_set(DebugSet),
+        )
+        .add_plugin(PathfindingDebugPlugin);
     }
 }
+
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub(crate) struct DebugSet;
 
 #[derive(Resource)]
 struct Inspector;
@@ -71,6 +85,23 @@ fn toggle_freelook_camera(
             commands.entity(entity).despawn_recursive();
         } else {
             spawn_freelook_camera(commands);
+        }
+    }
+}
+
+fn toggle_pathfinding_debug(
+    keyboard_input: Res<Input<KeyCode>>,
+    current_state: Res<State<PathfindingDebugState>>,
+    mut next_state: ResMut<NextState<PathfindingDebugState>>,
+) {
+    if keyboard_input.just_pressed(KeyCode::F4) {
+        match current_state.0 {
+            PathfindingDebugState::Enabled => {
+                next_state.set(PathfindingDebugState::Disabled);
+            }
+            PathfindingDebugState::Disabled => {
+                next_state.set(PathfindingDebugState::Enabled);
+            }
         }
     }
 }

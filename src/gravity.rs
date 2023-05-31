@@ -17,10 +17,6 @@ pub(crate) struct Gravity;
 
 fn gravity(mut query: Query<&mut KinematicCharacterController, With<Gravity>>) {
     for mut controller in &mut query {
-        controller.translation = Some(
-            controller
-                .translation
-                .map_or(Vec2::new(0., -1.), |t| t + Vec2::new(0., -1.)),
-        );
+        controller.translation = Some(Vec2::new(0., -1.));
     }
 }
