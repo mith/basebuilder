@@ -84,6 +84,8 @@ impl TerrainData {
 #[component(storage = "SparseSet")]
 struct GenerateTerrain(pub(crate) Task<TerrainData>);
 
+pub const TERRAIN_LAYER_Z: f32 = 0.0;
+
 pub const TERRAIN_COLLISION_GROUP: Group = Group::GROUP_1;
 
 fn spawn_terrain(
@@ -106,7 +108,7 @@ fn spawn_terrain(
             let terrain_transform = Transform::from_translation(Vec3::new(
                 -(terrain_settings.width as f32) * terrain_settings.cell_size as f32 / 2.0,
                 -(terrain_settings.height as f32) * terrain_settings.cell_size as f32 / 2.0,
-                0.0,
+                TERRAIN_LAYER_Z,
             ));
 
             for ((x, y), tile) in terrain_data.0.indexed_iter() {
@@ -180,7 +182,7 @@ fn setup_terrain(
     let terrain_transform = Transform::from_translation(Vec3::new(
         -(terrain_settings.width as f32) * terrain_settings.cell_size as f32 / 2.0,
         -(terrain_settings.height as f32) * terrain_settings.cell_size as f32 / 2.0,
-        0.0,
+        TERRAIN_LAYER_Z,
     ));
 
     commands.spawn((
@@ -197,7 +199,7 @@ fn setup_terrain(
             transform: Transform::from_xyz(
                 -terrain_settings.cell_size as f32 / 2.,
                 -terrain_settings.cell_size as f32 / 2.,
-                0.,
+                TERRAIN_LAYER_Z,
             ),
             material: materials.add(Color::TEAL.into()),
             mesh: meshes

@@ -34,6 +34,8 @@ pub struct Ghost;
 #[derive(Component)]
 pub struct ContainsStructure(pub Entity);
 
+pub const BUILDING_LAYER_Z: f32 = 2.0;
+
 fn build(
     mut commands: Commands,
     mouse_button_input: Res<Input<MouseButton>>,
@@ -64,7 +66,7 @@ fn build(
                 transform: Transform::from_xyz(
                     rounded_cursor_position.x,
                     rounded_cursor_position.y,
-                    2.0,
+                    BUILDING_LAYER_Z,
                 ),
                 material: materials.add(Color::rgb(0.0, 1.0, 0.0).into()),
                 mesh: meshes
@@ -83,7 +85,7 @@ fn build(
                 transform: Transform::from_xyz(
                     rounded_cursor_position.x,
                     rounded_cursor_position.y,
-                    2.0,
+                    BUILDING_LAYER_Z,
                 ),
                 material: materials.add(Color::rgba(0.0, 1.0, 0.0, 0.5).into()),
                 mesh: meshes

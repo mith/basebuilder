@@ -7,6 +7,7 @@ use bevy_egui::EguiPlugin;
 use bevy_proto::prelude::ProtoPlugin;
 use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 use build::BuildPlugin;
+use chop_tree::FellingPlugin;
 use climbable::ClimbablePlugin;
 
 use cursor_position::CursorPositionPlugin;
@@ -29,10 +30,12 @@ use structure::StructurePlugin;
 use terrain::TerrainPlugin;
 use terrain_settings::TerrainSettingsPlugin;
 use toolbar::ToolbarPlugin;
+use tree::TreePlugin;
 
 mod ai_controller;
 mod app_state;
 mod build;
+mod chop_tree;
 mod climbable;
 mod crafting;
 mod creep;
@@ -59,6 +62,7 @@ mod stuck;
 mod terrain;
 mod terrain_settings;
 mod toolbar;
+mod tree;
 
 fn main() {
     let mut app = App::new();
@@ -111,7 +115,9 @@ fn main() {
         .add_plugin(DigPlugin)
         .add_plugin(DesignationLayerPlugin)
         .add_plugin(BuildPlugin)
-        .add_plugin(ToolbarPlugin);
+        .add_plugin(ToolbarPlugin)
+        .add_plugin(TreePlugin)
+        .add_plugin(FellingPlugin);
 
     app.run();
 }

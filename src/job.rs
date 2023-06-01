@@ -38,7 +38,12 @@ pub struct Accessible;
 fn assign_job(
     mut commands: Commands,
     unassigned_job_query: Query<
-        (Entity, &TilePos, Option<&BlacklistedWorkers>),
+        (
+            Entity,
+            Option<&TilePos>,
+            Option<&GlobalTransform>,
+            Option<&BlacklistedWorkers>,
+        ),
         (With<Job>, Without<AssignedTo>, With<Accessible>),
     >,
     worker_query: Query<(Entity, &GlobalTransform), (With<Worker>, Without<HasJob>)>,
@@ -46,8 +51,20 @@ fn assign_job(
 ) {
     let mut available_workers = worker_query.iter().collect::<Vec<_>>();
     // Look for unnassigned jobs and assign them to the closest unnoccupied worker
-    for (job_entity, job_tilepos, opt_blacklisted_workers) in &unassigned_job_query {
-        let job_world_pos = terrain.tile_to_global_pos(*job_tilepos);
+    for (job_entity, opt_job_tilepos, opt_job_transform, opt_blacklisted_workers) in
+        &unassigned_job_query
+    {
+        let Some(job_world_pos) = (
+            if let Some(jsob_tile_pos) = opt_job_tilepos {
+                Some(terrain.tile_to_global_pos(*jsob_tile_pos))
+            } else if let Some(job_transform) = opt_job_transform {
+                Some(job_transform.translation().xy())
+            } else {
+                None
+            }
+        ) else {
+            return;
+        };
         // find closest worker
         // first calculate distance to job for each worker and sort
         available_workers.sort_by(|(_, a), (_, b)| {

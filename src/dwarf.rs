@@ -24,9 +24,7 @@ impl Plugin for DwarfPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<DwarvesState>().add_system(
             spawn_dwarves
-                .in_set(OnUpdate(AppState::Game))
-                .run_if(in_state(TerrainState::Spawned))
-                .run_if(in_state(DwarvesState::Spawning))
+                .in_schedule(OnEnter(TerrainState::Spawned))
                 .after(TerrainSet),
         );
     }
@@ -68,7 +66,7 @@ fn spawn_dwarves(
         if let Some((_entity, hit)) =
             rapier_context.cast_ray(Vec2::new(x, y), ray_dir, max_toi, true, filter)
         {
-            spawn_dwarf(&mut commands, x, y - hit + 6., &mut materials, &mut meshes);
+            spawn_dwarf(&mut commands, x, y - hit, &mut materials, &mut meshes);
         }
     }
     dwarves_state.set(DwarvesState::Spawned);
@@ -81,19 +79,18 @@ fn spawn_dwarf(
     materials: &mut ResMut<Assets<ColorMaterial>>,
     meshes: &mut ResMut<Assets<Mesh>>,
 ) {
+    let dwarf_size = Vec2::new(12., 12.);
     commands.spawn((
         Dwarf,
         Name::new("Dwarf"),
         MaterialMesh2dBundle {
-            transform: Transform::from_xyz(x, y, 3.),
+            transform: Transform::from_xyz(x, y + dwarf_size.y / 2., 3.),
             material: materials.add(Color::WHITE.into()),
-            mesh: meshes
-                .add(Mesh::from(shape::Quad::new(Vec2::new(12., 12.))))
-                .into(),
+            mesh: meshes.add(Mesh::from(shape::Quad::new(dwarf_size))).into(),
             ..default()
         },
         RigidBody::KinematicPositionBased,
-        Collider::round_cuboid(5., 5., 0.01),
+        Collider::round_cuboid(dwarf_size.x * 0.416, dwarf_size.y * 0.416, 0.01),
         CollisionGroups::new(DWARF_COLLISION_GROUP, TERRAIN_COLLISION_GROUP),
         KinematicCharacterController {
             filter_groups: Some(CollisionGroups::new(

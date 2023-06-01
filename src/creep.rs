@@ -46,7 +46,7 @@ fn spawn_creep(
             Walker::default(),
             AiControlled,
             Name::new("Creep"),
-            Health { value: 100 },
+            Health(100),
             MaterialMesh2dBundle {
                 transform: Transform::from_xyz(160., 16., 0.),
                 material: materials.add(Color::MAROON.into()),

@@ -17,9 +17,7 @@ impl Plugin for HealthPlugin {
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct HealthSet;
 #[derive(Component, Reflect)]
-pub(crate) struct Health {
-    pub(crate) value: u32,
-}
+pub(crate) struct Health(pub(crate) u32);
 
 pub(crate) struct HealthDamageEvent {
     pub(crate) entity: Entity,
@@ -32,14 +30,14 @@ fn update_health(
 ) {
     for damage_event in health_damage_events.iter() {
         if let Ok(mut health) = health_query.get_mut(damage_event.entity) {
-            health.value = health.value.saturating_sub(damage_event.damage);
+            health.0 = health.0.saturating_sub(damage_event.damage);
         }
     }
 }
 
 fn despawn_dead_entities(mut commands: Commands, mut health_query: Query<(Entity, &Health)>) {
     for (entity, health) in &mut health_query {
-        if health.value == 0 {
+        if health.0 == 0 {
             commands.entity(entity).despawn_recursive();
         }
     }
