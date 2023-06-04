@@ -18,8 +18,8 @@ use crate::{app_state::AppState, material::MaterialProperties, terrain_settings:
 
 use self::generate::{generate_terrain, TerrainGenerator};
 
-pub(crate) use self::terrain_params::TerrainParams;
-pub(crate) struct TerrainPlugin;
+pub use self::terrain_params::TerrainParams;
+pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
@@ -52,10 +52,10 @@ impl Plugin for TerrainPlugin {
 }
 
 #[derive(Component)]
-pub(crate) struct Terrain;
+pub struct Terrain;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct TerrainSet;
+pub struct TerrainSet;
 
 #[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum TerrainState {
@@ -82,7 +82,7 @@ impl TerrainData {
 
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-struct GenerateTerrain(pub(crate) Task<TerrainData>);
+struct GenerateTerrain(pub Task<TerrainData>);
 
 pub const TERRAIN_LAYER_Z: f32 = 0.0;
 
@@ -119,13 +119,22 @@ fn spawn_terrain(
                     };
 
                     let tile_entity = commands
-                        .spawn(TileBundle {
-                            position: tile_pos,
-                            tilemap_id: TilemapId(terrain_entity),
-                            texture_index: TileTextureIndex(0),
-                            color: material_properties.0[*tile as usize].color.into(),
-                            ..default()
-                        })
+                        .spawn((
+                            TileBundle {
+                                position: tile_pos,
+                                tilemap_id: TilemapId(terrain_entity),
+                                texture_index: TileTextureIndex(0),
+                                color: material_properties.0[*tile as usize].color.into(),
+                                ..default()
+                            },
+                            TransformBundle::from_transform(Transform::from_translation(
+                                Vec3::new(
+                                    x as f32 * terrain_settings.cell_size as f32,
+                                    y as f32 * terrain_settings.cell_size as f32,
+                                    0.0,
+                                ),
+                            )),
+                        ))
                         .id();
                     tile_storage.set(&tile_pos, tile_entity);
                 }
@@ -219,7 +228,7 @@ pub struct TileDamageEvent {
 }
 
 #[derive(Component)]
-pub(crate) struct TileHealth(u32);
+pub struct TileHealth(u32);
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 struct TerrainUpdateSet;
@@ -252,9 +261,9 @@ fn color_damage_tile(
     }
 }
 
-pub(crate) struct TileDestroyedEvent {
-    pub(crate) entity: Entity,
-    pub(crate) tile_pos: TilePos,
+pub struct TileDestroyedEvent {
+    pub entity: Entity,
+    pub tile_pos: TilePos,
 }
 
 fn remove_destroyed_tiles(

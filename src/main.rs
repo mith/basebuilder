@@ -12,10 +12,12 @@ use climbable::ClimbablePlugin;
 
 use cursor_position::CursorPositionPlugin;
 use debug::DebugPlugin;
+use deliver::DeliverPlugin;
 use designation_layer::DesignationLayerPlugin;
 use dig::DigPlugin;
 use dwarf::DwarfPlugin;
 use gravity::GravityPlugin;
+use haul::HaulPlugin;
 use health::HealthPlugin;
 use hit::HitPlugin;
 use hovered_tile::HoveredTilePlugin;
@@ -26,6 +28,8 @@ use main_camera::MainCameraPlugin;
 use material::MaterialPlugin;
 use movement::MovementPlugin;
 use pan_zoom_camera2d::PanZoomCamera2dPlugin;
+use pickup::PickupPlugin;
+use resource::BuildingMaterialPlugin;
 use structure::StructurePlugin;
 use terrain::TerrainPlugin;
 use terrain_settings::TerrainSettingsPlugin;
@@ -41,10 +45,12 @@ mod crafting;
 mod creep;
 mod cursor_position;
 mod debug;
+mod deliver;
 mod designation_layer;
 mod dig;
 mod dwarf;
 mod gravity;
+mod haul;
 mod health;
 mod hit;
 mod hovered_tile;
@@ -57,6 +63,8 @@ mod material;
 mod movement;
 mod pan_zoom_camera2d;
 mod pathfinding;
+mod pickup;
+mod resource;
 mod structure;
 mod stuck;
 mod terrain;
@@ -117,7 +125,11 @@ fn main() {
         .add_plugin(BuildPlugin)
         .add_plugin(ToolbarPlugin)
         .add_plugin(TreePlugin)
-        .add_plugin(FellingPlugin);
+        .add_plugin(FellingPlugin)
+        .add_plugin(BuildingMaterialPlugin)
+        .add_plugin(DeliverPlugin)
+        .add_plugin(PickupPlugin)
+        .add_plugin(HaulPlugin);
 
     app.run();
 }

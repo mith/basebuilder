@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-pub(crate) struct AppStatePlugin;
+pub struct AppStatePlugin;
 
 impl Plugin for AppStatePlugin {
     fn build(&self, app: &mut App) {
@@ -9,7 +9,7 @@ impl Plugin for AppStatePlugin {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, States)]
-pub(crate) enum AppState {
+pub enum AppState {
     #[default]
     Loading,
     Game,

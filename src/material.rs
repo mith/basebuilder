@@ -1,7 +1,7 @@
 use bevy::{prelude::*, reflect::TypeUuid};
 use bevy_common_assets::ron::RonAssetPlugin;
 
-pub(crate) struct MaterialPlugin;
+pub struct MaterialPlugin;
 
 impl Plugin for MaterialPlugin {
     fn build(&self, app: &mut App) {
@@ -14,9 +14,9 @@ impl Plugin for MaterialPlugin {
 }
 
 #[derive(serde::Deserialize, Clone)]
-pub(crate) struct Material {
-    pub(crate) name: String,
-    pub(crate) color: Color,
+pub struct Material {
+    pub name: String,
+    pub color: Color,
 }
 
 #[derive(serde::Deserialize, TypeUuid)]
@@ -32,10 +32,10 @@ fn load_materials(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 #[derive(Resource)]
-pub(crate) struct MaterialProperties(pub Vec<Material>);
+pub struct MaterialProperties(pub Vec<Material>);
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub(crate) enum MaterialsState {
+pub enum MaterialsState {
     #[default]
     Loading,
     Loaded,

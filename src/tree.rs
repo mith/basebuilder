@@ -7,7 +7,8 @@ use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
     chop_tree::PICKER_COLLISION_GROUP,
-    health::{self, Health},
+    health::Health,
+    resource::BuildingMaterial,
     terrain::{TerrainSet, TerrainState, TERRAIN_COLLISION_GROUP},
     terrain_settings::TerrainSettings,
 };
@@ -123,15 +124,54 @@ pub struct TreeDestroyedEvent {
     pub tree: Entity,
 }
 
+#[derive(Component)]
+pub struct Log;
+
+pub const OBJECT_COLLISION_GROUP: Group = Group::GROUP_5;
+
 fn destroy_trees(
     mut commands: Commands,
-    tree_health_query: Query<(&Health, Entity), With<Tree>>,
+    tree_health_query: Query<(&Health, &GlobalTransform, Entity), With<Tree>>,
     mut tree_destroyed_events: EventWriter<TreeDestroyedEvent>,
+    rapier_context: Res<RapierContext>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    for (tree_health, tree_entity) in &tree_health_query {
+    for (tree_health, tree_transform, tree_entity) in &tree_health_query {
         if tree_health.0 == 0 {
             commands.entity(tree_entity).despawn_recursive();
             tree_destroyed_events.send(TreeDestroyedEvent { tree: tree_entity });
+
+            let ray_origin = tree_transform.translation().truncate();
+            let ray_dir = Vec2::new(0.0, -1.0);
+            let max_toi = 200.;
+            let solid = true;
+            let filter: QueryFilter =
+                CollisionGroups::new(PICKER_COLLISION_GROUP, TERRAIN_COLLISION_GROUP).into();
+
+            if let Some(intersection) =
+                rapier_context.cast_ray_and_get_normal(ray_origin, ray_dir, max_toi, solid, filter)
+            {
+                let log_size = Vec2::new(15., 10.);
+                commands.spawn((
+                    Log,
+                    Name::new("Log"),
+                    BuildingMaterial,
+                    MaterialMesh2dBundle {
+                        transform: Transform::from_xyz(
+                            intersection.1.point.x,
+                            intersection.1.point.y + log_size.y / 2.,
+                            2.,
+                        ),
+                        material: materials.add(Color::rgb(0.29, 0.196, 0.101).into()),
+                        mesh: meshes.add(Mesh::from(shape::Quad::new(log_size))).into(),
+                        ..default()
+                    },
+                    RigidBody::Fixed,
+                    Collider::cuboid(log_size.x / 2., log_size.y / 2.),
+                    CollisionGroups::new(OBJECT_COLLISION_GROUP, TERRAIN_COLLISION_GROUP),
+                ));
+            }
         }
     }
 }

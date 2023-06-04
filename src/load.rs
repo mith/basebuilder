@@ -4,7 +4,7 @@ use crate::{
     app_state::AppState, material::MaterialsState, terrain_settings::TerrainSettingsState,
 };
 
-pub(crate) struct LoadPlugin;
+pub struct LoadPlugin;
 
 impl Plugin for LoadPlugin {
     fn build(&self, app: &mut App) {

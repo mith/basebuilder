@@ -12,7 +12,7 @@ use crate::{
     terrain::{TerrainParams, TERRAIN_COLLISION_GROUP},
 };
 
-pub(crate) struct MovementPlugin;
+pub struct MovementPlugin;
 
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
@@ -21,23 +21,23 @@ impl Plugin for MovementPlugin {
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct MovementSet;
+pub struct MovementSet;
 
 #[derive(Component, Default)]
-pub(crate) struct Walker {
-    pub(crate) move_direction: Option<Vec2>,
+pub struct Walker {
+    pub move_direction: Option<Vec2>,
 }
 #[derive(Component, Default)]
-pub(crate) struct Jumper {
-    pub(crate) jump_timer: Option<Timer>,
-    pub(crate) jump: bool,
+pub struct Jumper {
+    pub jump_timer: Option<Timer>,
+    pub jump: bool,
 }
 
 #[derive(Component)]
-pub(crate) struct Climber;
+pub struct Climber;
 
 #[derive(Component)]
-pub(crate) struct Climbing;
+pub struct Climbing;
 
 fn walk(
     mut dude_query: Query<(
@@ -73,7 +73,7 @@ fn walk(
 }
 
 #[derive(Component)]
-pub(crate) struct Falling;
+pub struct Falling;
 
 fn fall(
     mut commands: Commands,

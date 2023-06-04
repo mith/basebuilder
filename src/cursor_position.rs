@@ -1,5 +1,5 @@
 use bevy::{prelude::*, window::PrimaryWindow};
-pub(crate) struct CursorPositionPlugin;
+pub struct CursorPositionPlugin;
 
 impl Plugin for CursorPositionPlugin {
     fn build(&self, app: &mut App) {
@@ -9,9 +9,9 @@ impl Plugin for CursorPositionPlugin {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct CursorPositionSet;
+pub struct CursorPositionSet;
 
-pub(crate) fn cursor_position_in_world(
+pub fn cursor_position_in_world(
     window: &Window,
     cursor_position: Vec2,
     camera_transform: &GlobalTransform,
@@ -27,7 +27,7 @@ pub(crate) fn cursor_position_in_world(
 }
 
 #[derive(Default, Resource)]
-pub(crate) struct CursorPosition(pub(crate) Vec3);
+pub struct CursorPosition(pub Vec3);
 
 fn update_cursor_pos(
     window: Query<&Window, With<PrimaryWindow>>,

@@ -12,7 +12,7 @@ use crate::{
     terrain_settings::TerrainSettings,
 };
 
-pub(crate) struct HoveredTilePlugin;
+pub struct HoveredTilePlugin;
 
 impl Plugin for HoveredTilePlugin {
     fn build(&self, app: &mut App) {
@@ -33,7 +33,7 @@ impl Plugin for HoveredTilePlugin {
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct HoveredTileSet;
+pub struct HoveredTileSet;
 
 #[derive(Component)]
 struct HoverLayer;
@@ -80,7 +80,7 @@ fn setup_hovered_layer(
 }
 
 #[derive(Component)]
-pub(crate) struct HoveredTile;
+pub struct HoveredTile;
 
 fn hovered_tile(
     mut commands: Commands,

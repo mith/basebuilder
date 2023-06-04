@@ -3,7 +3,7 @@ use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::terrain::{Terrain, TerrainParams};
 
-pub(crate) struct ClimbablePlugin;
+pub struct ClimbablePlugin;
 
 impl Plugin for ClimbablePlugin {
     fn build(&self, app: &mut App) {
@@ -12,17 +12,17 @@ impl Plugin for ClimbablePlugin {
 }
 
 #[derive(Component)]
-pub(crate) struct Climbable;
+pub struct Climbable;
 
 #[derive(Component, Default)]
-pub(crate) struct ClimbableMap(HashSet<TilePos>);
+pub struct ClimbableMap(HashSet<TilePos>);
 
 impl ClimbableMap {
-    pub(crate) fn mark_climbable(&mut self, tile_pos: TilePos) {
+    pub fn mark_climbable(&mut self, tile_pos: TilePos) {
         self.0.insert(tile_pos);
     }
 
-    pub(crate) fn is_climbable(&self, tile_pos: TilePos) -> bool {
+    pub fn is_climbable(&self, tile_pos: TilePos) -> bool {
         self.0.contains(&tile_pos)
     }
 }

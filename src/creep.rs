@@ -7,9 +7,9 @@ use crate::{
 };
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct CreepSet;
+pub struct CreepSet;
 
-pub(crate) struct CreepPlugin;
+pub struct CreepPlugin;
 
 impl Plugin for CreepPlugin {
     fn build(&self, app: &mut App) {
@@ -22,7 +22,7 @@ impl Plugin for CreepPlugin {
 }
 
 #[derive(Component)]
-pub(crate) struct Creep;
+pub struct Creep;
 
 #[derive(Resource)]
 struct CreepSpawnTimer(Timer);

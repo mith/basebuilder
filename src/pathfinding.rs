@@ -1,15 +1,48 @@
 use std::matches;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use bevy_ecs_tilemap::{
     helpers::square_grid::neighbors::SquareDirection, prelude::TilemapSize, tiles::TilePos,
 };
 use pathfinding::directed::astar::astar;
 
-use crate::{climbable::ClimbableMap, terrain::TerrainData};
+use crate::{
+    climbable::ClimbableMap,
+    terrain::{TerrainData, TerrainParams},
+};
 
-pub(crate) fn find_path(
+#[derive(SystemParam)]
+pub struct Pathfinding<'w, 's> {
+    pub terrain: TerrainParams<'w, 's>,
+    climbable_map_query: Query<'w, 's, &'static ClimbableMap>,
+}
+
+impl<'w, 's> Pathfinding<'w, 's> {
+    pub fn find_path(&self, start_pos: Vec2, target_pos: Vec2) -> Option<Vec<UVec2>> {
+        let Some(start_tile_pos) = self.terrain.global_to_tile_pos(start_pos) else {
+            return None;
+        };
+        let Some(target_tile_pos) = self.terrain.global_to_tile_pos(target_pos) else {
+            return None;
+        };
+        let terrain_data = self.terrain.terrain_data_query.single();
+        let climbable_map = self.climbable_map_query.single();
+        let path = find_path(
+            terrain_data,
+            Some(climbable_map),
+            start_tile_pos.into(),
+            target_tile_pos.into(),
+        );
+        if path.is_empty() {
+            None
+        } else {
+            Some(path)
+        }
+    }
+}
+
+pub fn find_path(
     terrain_data: &TerrainData,
     climbable_map: Option<&ClimbableMap>,
     start_tile_pos: UVec2,
@@ -65,7 +98,7 @@ pub(crate) fn find_path(
     .0
 }
 
-pub(crate) fn can_stand_or_climb(
+pub fn can_stand_or_climb(
     terrain_data: &TerrainData,
     climbable_map: Option<&ClimbableMap>,
     tile_pos: TilePos,
@@ -85,7 +118,7 @@ pub(crate) fn can_stand_or_climb(
     can_climb_in_tile || can_stand_in_tile
 }
 
-pub(crate) fn can_climb(climbable_map: Option<&ClimbableMap>, tile_pos: TilePos) -> bool {
+pub fn can_climb(climbable_map: Option<&ClimbableMap>, tile_pos: TilePos) -> bool {
     if let Some(climbable_map) = climbable_map {
         let tile_is_climbable = climbable_map.is_climbable(tile_pos.into());
         if tile_is_climbable {
@@ -95,7 +128,7 @@ pub(crate) fn can_climb(climbable_map: Option<&ClimbableMap>, tile_pos: TilePos)
     false
 }
 
-pub(crate) fn can_stand(
+pub fn can_stand(
     terrain_data: &TerrainData,
     climbable_map: Option<&ClimbableMap>,
     tile_pos: TilePos,
@@ -112,7 +145,7 @@ pub(crate) fn can_stand(
     return south_tile_is_solid || south_tile_is_climbable;
 }
 
-pub(crate) fn can_move_to(
+pub fn can_move_to(
     terrain_data: &TerrainData,
     climbable_map: Option<&ClimbableMap>,
     tile_pos: TilePos,

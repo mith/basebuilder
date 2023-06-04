@@ -9,7 +9,7 @@ use crate::pan_zoom_camera2d::{PanZoomCamera2d, PanZoomCamera2dBundle};
 
 use self::pathfinding::{PathfindingDebugPlugin, PathfindingDebugState};
 
-pub(crate) struct DebugPlugin;
+pub struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
@@ -34,7 +34,7 @@ impl Plugin for DebugPlugin {
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct DebugSet;
+pub struct DebugSet;
 
 #[derive(Resource)]
 struct Inspector;

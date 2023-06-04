@@ -7,7 +7,7 @@ use bevy_ecs_tilemap::{
 
 use crate::{app_state::AppState, terrain::TileDestroyedEvent, terrain_settings::TerrainSettings};
 
-pub(crate) struct DesignationLayerPlugin;
+pub struct DesignationLayerPlugin;
 
 impl Plugin for DesignationLayerPlugin {
     fn build(&self, app: &mut App) {
@@ -27,7 +27,7 @@ impl Plugin for DesignationLayerPlugin {
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub(crate) struct DesignationLayerSet;
+pub struct DesignationLayerSet;
 
 #[derive(Component)]
 struct HoverLayer;
@@ -76,7 +76,7 @@ fn setup_designation_layer(
 }
 
 #[derive(Component)]
-pub(crate) struct Designated;
+pub struct Designated;
 
 const HIGHLIGHT_COLOR: Color = Color::rgba(1., 1., 0.2, 0.2);
 

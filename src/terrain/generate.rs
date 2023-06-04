@@ -19,10 +19,10 @@ use crate::terrain_settings::TerrainSettings;
 type GeneratorFunction = Arc<Mutex<Box<dyn NoiseFn<f64, 2> + Send + Sync>>>;
 
 #[derive(Component)]
-pub(crate) struct TerrainGenerator(pub(crate) GeneratorFunction);
+pub struct TerrainGenerator(pub GeneratorFunction);
 
 impl TerrainGenerator {
-    pub(crate) fn new(terrain_settings: TerrainSettings) -> Self {
+    pub fn new(terrain_settings: TerrainSettings) -> Self {
         let seed = terrain_settings.seed;
 
         // let simplex = SuperSimplex::new(seed);
@@ -45,7 +45,7 @@ impl TerrainGenerator {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct RadiusNoise {
+pub struct RadiusNoise {
     location: [f64; 2],
     radius: f64,
 }
@@ -63,7 +63,7 @@ impl NoiseFn<f64, 2> for RadiusNoise {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct PlaneNoise {
+pub struct PlaneNoise {
     height: f64,
 }
 
@@ -77,7 +77,7 @@ impl NoiseFn<f64, 2> for PlaneNoise {
     }
 }
 
-pub(crate) fn generate_terrain(
+pub fn generate_terrain(
     region_location: IVec2,
     generator: GeneratorFunction,
     terrain_settings: TerrainSettings,

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-pub(crate) struct HealthPlugin;
+pub struct HealthPlugin;
 
 impl Plugin for HealthPlugin {
     fn build(&self, app: &mut App) {
@@ -15,13 +15,13 @@ impl Plugin for HealthPlugin {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct HealthSet;
+pub struct HealthSet;
 #[derive(Component, Reflect)]
-pub(crate) struct Health(pub(crate) u32);
+pub struct Health(pub u32);
 
-pub(crate) struct HealthDamageEvent {
-    pub(crate) entity: Entity,
-    pub(crate) damage: u32,
+pub struct HealthDamageEvent {
+    pub entity: Entity,
+    pub damage: u32,
 }
 
 fn update_health(

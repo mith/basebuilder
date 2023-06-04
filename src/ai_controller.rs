@@ -6,18 +6,19 @@ use crate::{
     terrain::{TerrainParams, TerrainSet, TerrainState, TileDestroyedEvent},
 };
 
-pub(crate) struct AiControllerPlugin;
+pub struct AiControllerPlugin;
 
 impl Plugin for AiControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<MoveTo>()
+        app.add_event::<ArrivedAtTargetEvent>()
+            .register_type::<MoveTo>()
             .register_type::<Path>()
             .add_systems(
                 (
                     invalidate_paths,
                     apply_system_buffers,
                     update_target,
-                    move_to_target,
+                    follow_path,
                     move_to_removed,
                 )
                     .chain()
@@ -31,28 +32,32 @@ impl Plugin for AiControllerPlugin {
 }
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-pub(crate) struct AiControllerSet;
+pub struct AiControllerSet;
 
 #[derive(Component)]
-pub(crate) struct AiControlled;
+pub struct AiControlled;
 
 #[derive(Component, Reflect)]
-pub(crate) struct MoveTo {
-    pub(crate) entity: Option<Entity>,
-    pub(crate) position: Vec2,
+pub struct MoveTo {
+    pub entity: Option<Entity>,
+    pub position: Vec2,
 }
 
-#[derive(Component, Reflect)]
-pub(crate) struct Path(pub(crate) Vec<UVec2>);
+#[derive(Component, Reflect, Clone, FromReflect)]
+pub struct Path(pub Vec<UVec2>);
 
-fn move_to_target(
-    mut target_query: Query<
-        (&mut Path, &mut Walker, &GlobalTransform),
-        (With<MoveTo>, With<AiControlled>, Without<Falling>),
+pub struct ArrivedAtTargetEvent(pub Entity);
+
+fn follow_path(
+    mut commands: Commands,
+    mut path_query: Query<
+        (Entity, &mut Path, &mut Walker, &GlobalTransform),
+        (With<AiControlled>, Without<Falling>),
     >,
     terrain: TerrainParams,
+    mut arrived_events_writer: EventWriter<ArrivedAtTargetEvent>,
 ) {
-    for (mut path, mut walker, walker_global_transform) in &mut target_query {
+    for (walker_entity, mut path, mut walker, walker_global_transform) in &mut path_query {
         let walker_tile_pos = terrain
             .global_to_tile_pos(walker_global_transform.translation().xy())
             .unwrap();
@@ -97,7 +102,11 @@ fn move_to_target(
                 );
                 walker.move_direction = Some(distance.normalize());
             }
-        } // else: path is empty, destination reached
+        } else {
+            walker.move_direction = None;
+            commands.entity(walker_entity).remove::<Path>();
+            arrived_events_writer.send(ArrivedAtTargetEvent(walker_entity));
+        }
     }
 }
 

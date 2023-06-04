@@ -3,7 +3,7 @@ use bevy_rapier2d::prelude::{Collider, ExternalImpulse, RayIntersection, RigidBo
 
 use crate::health::{Health, HealthDamageEvent, HealthSet};
 
-pub(crate) struct HitPlugin;
+pub struct HitPlugin;
 
 impl Plugin for HitPlugin {
     fn build(&self, app: &mut App) {
@@ -13,20 +13,20 @@ impl Plugin for HitPlugin {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct HitSet;
+pub struct HitSet;
 
-pub(crate) struct HitEvent {
-    pub(crate) entity: Entity,
-    pub(crate) intersection: RayIntersection,
-    pub(crate) damage: u32,
+pub struct HitEvent {
+    pub entity: Entity,
+    pub intersection: RayIntersection,
+    pub damage: u32,
 }
 
 #[derive(Component)]
-pub(crate) struct Wound;
+pub struct Wound;
 
 #[derive(Component)]
-pub(crate) struct BloodParticle {
-    pub(crate) life_timer: Timer,
+pub struct BloodParticle {
+    pub life_timer: Timer,
 }
 
 fn hits(

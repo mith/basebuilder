@@ -11,11 +11,12 @@ use bevy_ecs_tilemap::{
 use super::{Terrain, TerrainData};
 
 #[derive(SystemParam)]
-pub(crate) struct TerrainParams<'w, 's> {
-    pub(crate) terrain_query: Query<
+pub struct TerrainParams<'w, 's> {
+    pub terrain_query: Query<
         'w,
         's,
         (
+            Entity,
             &'static GlobalTransform,
             &'static TilemapGridSize,
             &'static TilemapSize,
@@ -23,13 +24,13 @@ pub(crate) struct TerrainParams<'w, 's> {
         ),
         With<Terrain>,
     >,
-    pub(crate) terrain_data_query: Query<'w, 's, &'static TerrainData, With<Terrain>>,
-    pub(crate) tile_storage: Query<'w, 's, &'static TileStorage, With<Terrain>>,
+    pub terrain_data_query: Query<'w, 's, &'static TerrainData, With<Terrain>>,
+    pub tile_storage: Query<'w, 's, &'static TileStorage, With<Terrain>>,
 }
 
 impl TerrainParams<'_, '_> {
-    pub(crate) fn global_to_tile_pos(&self, global_pos: Vec2) -> Option<TilePos> {
-        let Ok((terrain_transform, tilemap_grid_size, tilemap_size, tilemap_type)) =
+    pub fn global_to_tile_pos(&self, global_pos: Vec2) -> Option<TilePos> {
+        let Ok((_, terrain_transform, tilemap_grid_size, tilemap_size, tilemap_type)) =
             self.terrain_query.get_single() else {
                 return None;
             };
@@ -46,8 +47,8 @@ impl TerrainParams<'_, '_> {
         )
     }
 
-    pub(crate) fn tile_to_global_pos(&self, tile_pos: TilePos) -> Vec2 {
-        let (terrain_transform, tilemap_grid_size, _tilemap_size, tilemap_type) =
+    pub fn tile_to_global_pos(&self, tile_pos: TilePos) -> Vec2 {
+        let (_, terrain_transform, tilemap_grid_size, _tilemap_size, tilemap_type) =
             self.terrain_query.single();
         terrain_transform
             .compute_matrix()
@@ -59,16 +60,20 @@ impl TerrainParams<'_, '_> {
             .xy()
     }
 
-    pub(crate) fn get_tile_entity(&self, tile_pos: TilePos) -> Option<Entity> {
+    pub fn get_tile_entity(&self, tile_pos: TilePos) -> Option<Entity> {
         let tile_storage = self.tile_storage.single();
         tile_storage.get(&tile_pos)
     }
 
-    pub(crate) fn get_tile(&self, tile_pos: TilePos) -> Option<u16> {
+    pub fn get_tile(&self, tile_pos: TilePos) -> Option<u16> {
         let terrain_data = self.terrain_data_query.single();
         terrain_data
             .0
             .get([tile_pos.x as usize, tile_pos.y as usize])
             .copied()
+    }
+
+    pub fn get_terrain_entity(&self) -> Entity {
+        self.terrain_query.single().0
     }
 }

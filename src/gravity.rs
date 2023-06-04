@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::KinematicCharacterController;
 
-pub(crate) struct GravityPlugin;
+pub struct GravityPlugin;
 
 impl Plugin for GravityPlugin {
     fn build(&self, app: &mut App) {
@@ -10,10 +10,10 @@ impl Plugin for GravityPlugin {
 }
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-pub(crate) struct GravitySet;
+pub struct GravitySet;
 
 #[derive(Component)]
-pub(crate) struct Gravity;
+pub struct Gravity;
 
 fn gravity(mut query: Query<&mut KinematicCharacterController, With<Gravity>>) {
     for mut controller in &mut query {

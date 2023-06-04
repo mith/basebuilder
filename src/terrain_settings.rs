@@ -4,7 +4,7 @@ use bevy_common_assets::ron::RonAssetPlugin;
 
 use crate::material::MaterialProperties;
 
-pub(crate) struct TerrainSettingsPlugin;
+pub struct TerrainSettingsPlugin;
 
 impl Plugin for TerrainSettingsPlugin {
     fn build(&self, app: &mut App) {
@@ -42,16 +42,16 @@ fn load_terrain_settings(mut commands: Commands, asset_server: Res<AssetServer>)
 }
 
 #[derive(Resource, Clone, Debug, Reflect)]
-pub(crate) struct TerrainSettings {
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) cell_size: f32,
-    pub(crate) ore_incidences: HashMap<u16, f32>,
-    pub(crate) seed: u32,
+pub struct TerrainSettings {
+    pub width: u32,
+    pub height: u32,
+    pub cell_size: f32,
+    pub ore_incidences: HashMap<u16, f32>,
+    pub seed: u32,
 }
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub(crate) enum TerrainSettingsState {
+pub enum TerrainSettingsState {
     #[default]
     Loading,
     Loaded,

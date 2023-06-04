@@ -1,17 +1,34 @@
-use bevy::{math::Vec3Swizzles, prelude::*, utils::HashMap};
+use bevy::{
+    math::Vec3Swizzles,
+    prelude::*,
+    utils::{HashMap, HashSet},
+};
 use bevy_ecs_tilemap::tiles::TilePos;
 use bevy_rapier2d::prelude::KinematicCharacterControllerOutput;
 
-use crate::{ai_controller::MoveTo, terrain::TerrainParams};
+use crate::{
+    ai_controller::{MoveTo, Path},
+    pathfinding::Pathfinding,
+};
 
 pub struct JobPlugin;
 
 impl Plugin for JobPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<HasJob>()
+        app.add_event::<JobAssignedEvent>()
+            .register_type::<AssignedJob>()
             .register_type::<AssignedTo>()
             .register_type::<BlacklistedWorkers>()
-            .add_systems((assign_job, blacklist_timer, stuck, stuck_timer));
+            .register_type::<PathableWorkers>()
+            .register_type::<EligibleWorkers>()
+            .add_systems((
+                find_pathable_workers,
+                assign_job,
+                commute,
+                blacklist_timer,
+                stuck,
+                stuck_timer,
+            ));
     }
 }
 
@@ -22,81 +39,200 @@ pub struct Job;
 pub struct Worker;
 
 #[derive(Component, Reflect)]
-pub struct HasJob(Entity);
+pub struct AssignedJob(pub Entity);
 
 #[derive(Component, Reflect)]
-pub struct AssignedTo {
-    pub entity: Entity,
+pub struct AssignedTo(pub Entity);
+
+#[derive(Component, Reflect)]
+pub struct BlacklistedWorkers(HashMap<Entity, Timer>);
+
+#[derive(Component, Clone)]
+pub struct JobSite(pub Vec<Vec2>);
+
+#[derive(Component)]
+pub struct Commuting;
+
+#[derive(Component)]
+pub struct AtJobSite;
+
+pub struct JobAssignedEvent {
+    pub job: Entity,
+    pub worker: Entity,
 }
 
 #[derive(Component, Reflect)]
-struct BlacklistedWorkers(HashMap<Entity, Timer>);
+pub struct PathableWorkers(pub HashMap<Entity, Path>);
 
-#[derive(Component)]
-pub struct Accessible;
+pub fn find_pathable_workers(
+    mut commands: Commands,
+    unassigned_job_query: Query<(Entity, &JobSite), (With<Job>, Without<AssignedTo>)>,
+    worker_query: Query<(Entity, &GlobalTransform), (With<Worker>, Without<AssignedJob>)>,
+    pathfinder: Pathfinding,
+) {
+    let unassigned_workers = worker_query.iter().collect::<Vec<_>>();
+    // Look for unnassigned jobs and assign them to the closest unnoccupied worker
+    for (job_entity, job_site) in &unassigned_job_query {
+        // find path for each worker, discard worker if no path found
+        let pathable_workers: HashMap<Entity, Path> = unassigned_workers
+            .iter()
+            .filter_map(|(worker_entity, worker_transform)| {
+                let pathable_job_sites = job_site.0.iter().filter_map(|site_pos| {
+                    pathfinder.find_path(worker_transform.translation().xy(), *site_pos)
+                });
 
-fn assign_job(
+                if let Some(path) = pathable_job_sites.min_by_key(|path| path.len()) {
+                    Some((*worker_entity, Path(path)))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        commands
+            .entity(job_entity)
+            .insert(PathableWorkers(pathable_workers));
+    }
+}
+
+#[derive(Component, Reflect)]
+pub struct EligibleWorkers(pub HashSet<Entity>);
+
+pub fn assign_job(
     mut commands: Commands,
     unassigned_job_query: Query<
         (
             Entity,
-            Option<&TilePos>,
-            Option<&GlobalTransform>,
             Option<&BlacklistedWorkers>,
+            &PathableWorkers,
+            &EligibleWorkers,
         ),
-        (With<Job>, Without<AssignedTo>, With<Accessible>),
+        (With<Job>, Without<AssignedTo>),
     >,
-    worker_query: Query<(Entity, &GlobalTransform), (With<Worker>, Without<HasJob>)>,
-    terrain: TerrainParams,
+    worker_query: Query<(Entity, &GlobalTransform), (With<Worker>, Without<AssignedJob>)>,
 ) {
-    let mut available_workers = worker_query.iter().collect::<Vec<_>>();
+    let mut unassigned_workers: HashMap<Entity, &GlobalTransform> = HashMap::from_iter(
+        worker_query
+            .iter()
+            .map(|(entity, transform)| (entity, transform)),
+    );
     // Look for unnassigned jobs and assign them to the closest unnoccupied worker
-    for (job_entity, opt_job_tilepos, opt_job_transform, opt_blacklisted_workers) in
+    for (job_entity, opt_blacklisted_workers, pathable_workers, eligible_workers) in
         &unassigned_job_query
     {
-        let Some(job_world_pos) = (
-            if let Some(jsob_tile_pos) = opt_job_tilepos {
-                Some(terrain.tile_to_global_pos(*jsob_tile_pos))
-            } else if let Some(job_transform) = opt_job_transform {
-                Some(job_transform.translation().xy())
-            } else {
-                None
-            }
-        ) else {
-            return;
-        };
-        // find closest worker
-        // first calculate distance to job for each worker and sort
-        available_workers.sort_by(|(_, a), (_, b)| {
-            a.translation()
-                .xy()
-                .distance(job_world_pos)
-                .partial_cmp(&b.translation().xy().distance(job_world_pos))
-                .unwrap()
-        });
-
-        let available_worker =
-            available_workers
+        // take the intersection of available workers and eligible workers and remove blacklisted workers
+        let available_workers: HashMap<Entity, &Path> = HashMap::from_iter(
+            pathable_workers
+                .0
                 .iter()
-                .enumerate()
-                .find(|(_i, (worker_entity, _))| {
-                    // check if worker has not been unassigned from this job earlier
+                .filter_map(|(worker_entity, path)| {
                     if let Some(blacklisted_workers) = opt_blacklisted_workers {
                         if blacklisted_workers.0.contains_key(worker_entity) {
-                            return false;
+                            return None;
                         }
                     }
-                    true
-                });
+                    if eligible_workers.0.contains(worker_entity) {
+                        Some((*worker_entity, path))
+                    } else {
+                        None
+                    }
+                }),
+        );
 
-        if let Some((i, (available_worker, _worker_transform))) = available_worker {
+        // find closest available worker
+        let closest_available_worker = available_workers
+            .iter()
+            .min_by_key(|(_, path)| path.0.len())
+            .map(|(worker_entity, _)| (*worker_entity, available_workers[worker_entity]));
+
+        if let Some((worker_entity, path)) = closest_available_worker {
+            // assign job to worker
+            commands.entity(worker_entity).insert((
+                AssignedJob(job_entity),
+                Commuting,
+                path.clone(),
+            ));
             commands
-                .entity(*available_worker)
-                .insert(HasJob(job_entity));
-            commands.entity(job_entity).insert(AssignedTo {
-                entity: *available_worker,
-            });
-            available_workers.remove(i);
+                .entity(job_entity)
+                .insert(AssignedTo(worker_entity));
+            // remove worker from available workers
+            unassigned_workers.remove(&worker_entity);
+        }
+    }
+}
+
+pub fn job_assigned<J, W>(
+    mut commands: Commands,
+    assigned_job_query: Query<&AssignedTo, (With<J>, Added<AssignedTo>)>,
+) where
+    J: Component,
+    W: Component + Default,
+{
+    for assigned_to in &assigned_job_query {
+        commands.entity(assigned_to.0).insert(W::default());
+    }
+}
+
+pub fn all_workers_eligible<J>(
+    mut commands: Commands,
+    new_job_query: Query<Entity, (With<J>, Without<EligibleWorkers>, Added<Job>)>,
+    worker_query: Query<Entity, With<Worker>>,
+) where
+    J: Component,
+{
+    for job in &new_job_query {
+        commands
+            .entity(job)
+            .insert(EligibleWorkers(HashSet::from_iter(worker_query.iter())));
+    }
+}
+
+fn commute(
+    mut commands: Commands,
+    workers_query: Query<
+        (Entity, &AssignedJob, &GlobalTransform, Option<&Path>),
+        Without<AtJobSite>,
+    >,
+    job_query: Query<&JobSite>,
+    pathfinder: Pathfinding,
+) {
+    for (worker_entity, assigned_job, worker_transform, opt_path) in &workers_query {
+        // if the worker already has a path, add commute component and continue
+        if opt_path.is_some() {
+            continue;
+        }
+
+        let job_site = job_query
+            .get(assigned_job.0)
+            .expect("Worker has job without job site");
+
+        // check if worker is already at job site
+        if job_site.0.iter().any(|job_site_world_pos| {
+            worker_transform
+                .translation()
+                .xy()
+                .distance(*job_site_world_pos)
+                < 10.
+        }) {
+            commands
+                .entity(worker_entity)
+                .insert(AtJobSite)
+                .remove::<Commuting>();
+            continue;
+        }
+
+        // find job site tile with the shortest path from worker position
+        let paths = job_site.0.iter().filter_map(|job_site_world_pos| {
+            pathfinder.find_path(worker_transform.translation().xy(), *job_site_world_pos)
+        });
+        let shortest_path = paths.min_by(|path_a, path_b| path_a.len().cmp(&path_b.len()));
+
+        if let Some(path) = shortest_path {
+            commands.entity(worker_entity).insert(Commuting);
+            commands.entity(worker_entity).insert(Path(path));
+        } else {
+            // no path found, start stucktimer
+            commands.entity(worker_entity).insert(StuckTimer::default());
         }
     }
 }
@@ -117,7 +253,13 @@ fn blacklist_timer(time: Res<Time>, mut blacklisted_worker_query: Query<&mut Bla
 }
 
 #[derive(Component)]
-struct StuckTimer(Timer);
+pub struct StuckTimer(Timer);
+
+impl Default for StuckTimer {
+    fn default() -> Self {
+        Self(Timer::from_seconds(1., TimerMode::Once))
+    }
+}
 
 fn stuck(
     mut commands: Commands,
@@ -128,7 +270,7 @@ fn stuck(
             Option<&MoveTo>,
             &KinematicCharacterControllerOutput,
         ),
-        (With<Worker>, With<HasJob>),
+        (With<Worker>, With<AssignedJob>),
     >,
 ) {
     for (worker_entity, opt_stuck_timer, opt_move_to, controller_output) in &worker_query {
@@ -152,23 +294,25 @@ fn stuck(
 fn stuck_timer(
     mut commands: Commands,
     time: Res<Time>,
-    mut stuck_timer_query: Query<(Entity, &mut StuckTimer, &HasJob), With<Worker>>,
+    mut stuck_timer_query: Query<(Entity, &mut StuckTimer, &AssignedJob), With<Worker>>,
     mut blacklisted_workers_query: Query<&mut BlacklistedWorkers, With<Job>>,
 ) {
-    for (worker_entity, mut stuck_timer, has_job) in &mut stuck_timer_query {
+    for (worker_entity, mut stuck_timer, assigned_job) in &mut stuck_timer_query {
         if stuck_timer.0.tick(time.delta()).just_finished() {
             commands.entity(worker_entity).remove::<StuckTimer>();
-            commands.entity(worker_entity).remove::<HasJob>();
+            commands.entity(worker_entity).remove::<AssignedJob>();
 
-            commands.entity(has_job.0).remove::<AssignedTo>();
-            if let Ok(mut blacklisted_workers) = blacklisted_workers_query.get_mut(has_job.0) {
+            commands.entity(assigned_job.0).remove::<AssignedTo>();
+            if let Ok(mut blacklisted_workers) = blacklisted_workers_query.get_mut(assigned_job.0) {
                 blacklisted_workers
                     .0
                     .insert(worker_entity, Timer::from_seconds(5., TimerMode::Once));
             } else {
                 let map =
                     HashMap::from([(worker_entity, Timer::from_seconds(5., TimerMode::Once))]);
-                commands.entity(has_job.0).insert(BlacklistedWorkers(map));
+                commands
+                    .entity(assigned_job.0)
+                    .insert(BlacklistedWorkers(map));
             }
         }
     }
