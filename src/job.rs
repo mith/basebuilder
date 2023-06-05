@@ -24,11 +24,19 @@ impl Plugin for JobPlugin {
             .add_systems((
                 find_pathable_workers,
                 assign_job,
-                commute,
                 blacklist_timer,
                 stuck,
                 stuck_timer,
-            ));
+            ))
+            .add_systems(
+                (
+                    apply_system_buffers,
+                    job_unassigned,
+                    apply_system_buffers,
+                    commute,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -235,6 +243,24 @@ fn commute(
             commands.entity(worker_entity).insert(StuckTimer::default());
         }
     }
+}
+
+fn job_unassigned(
+    mut commands: Commands,
+    mut removed_assigned_job: RemovedComponents<AssignedJob>,
+) {
+    for unassigned_worker_entity in removed_assigned_job.iter() {
+        unassign_job(&mut commands, unassigned_worker_entity);
+    }
+}
+
+pub fn unassign_job(commands: &mut Commands, unassigned_worker_entity: Entity) {
+    commands
+        .entity(unassigned_worker_entity)
+        .remove::<Commuting>()
+        .remove::<JobSite>()
+        .remove::<AtJobSite>();
+    commands.entity(unassigned_worker_entity).remove::<Path>();
 }
 
 fn blacklist_timer(time: Res<Time>, mut blacklisted_worker_query: Query<&mut BlacklistedWorkers>) {

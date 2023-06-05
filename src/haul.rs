@@ -1,20 +1,20 @@
 use bevy::prelude::*;
 
 use crate::{
-    deliver::{Delivering, Delivery},
-    job::{all_workers_eligible, AssignedJob, AssignedTo, AtJobSite, Job, JobSite},
-    pickup::{Pickup, PickupCompleteEvent},
+    deliver::{Delivering, Delivery, DeliveryCompletedEvent},
+    job::{all_workers_eligible, unassign_job, AssignedJob, AssignedTo, AtJobSite, Job, JobSite},
+    pickup::{Pickup, PickupCompletedEvent},
 };
 
 pub struct HaulPlugin;
 
 impl Plugin for HaulPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems((
+        app.add_event::<HaulCompletedEvent>().add_systems((
             all_workers_eligible::<Haul>,
             haul_job_assigned,
             pickup_complete,
-            complete_haul,
+            delivery_complete,
         ));
     }
 }
@@ -24,8 +24,6 @@ pub struct Haul {
     pub load: Entity,
     pub amount: u32,
     pub to: Entity,
-    pickup_job: Option<Entity>,
-    delivery_job: Option<Entity>,
     pickup_site: JobSite,
     delivery_site: JobSite,
 }
@@ -42,8 +40,6 @@ impl Haul {
             load,
             amount,
             to,
-            pickup_job: None,
-            delivery_job: None,
             pickup_site,
             delivery_site,
         }
@@ -84,45 +80,76 @@ fn haul_job_assigned(
 
 fn pickup_complete(
     mut commands: Commands,
-    mut pickup_complete_event_reader: EventReader<PickupCompleteEvent>,
+    mut pickup_complete_event_reader: EventReader<PickupCompletedEvent>,
     mut haul_job_query: Query<&mut Haul>,
 ) {
-    for PickupCompleteEvent { job, worker, item } in pickup_complete_event_reader.iter() {
-        for mut haul in &mut haul_job_query {
-            if haul.pickup_job == Some(*job) {
-                haul.pickup_job = None;
-                commands.entity(*worker).with_children(|parent| {
-                    haul.delivery_job = Some(
-                        parent
-                            .spawn((
-                                Job,
-                                AssignedTo(*worker),
-                                Delivery {
-                                    amount: 0,
-                                    load: *item,
-                                    to: haul.to,
-                                },
-                                haul.delivery_site.clone(),
-                            ))
-                            .id(),
-                    );
-                });
-                if haul.delivery_job.is_some() {
-                    commands.entity(*worker).insert(Delivering);
-                }
-            }
+    for PickupCompletedEvent {
+        job: _,
+        parent_job,
+        worker,
+        item,
+    } in pickup_complete_event_reader.iter()
+    {
+        if let Some((haul_entity, haul)) =
+            parent_job.and_then(|e| haul_job_query.get_mut(e).ok().map(|h| (e, h)))
+        {
+            let pickup_job = commands
+                .spawn((
+                    Job,
+                    AssignedTo(*worker),
+                    Delivery {
+                        amount: 0,
+                        load: *item,
+                        to: haul.to,
+                    },
+                    haul.delivery_site.clone(),
+                ))
+                .id();
+            commands.entity(haul_entity).add_child(pickup_job);
+            commands
+                .entity(*worker)
+                .insert(Delivering)
+                .insert(AssignedJob(pickup_job))
+                .insert(haul.delivery_site.clone());
         }
     }
 }
 
-fn complete_haul(
+pub struct HaulCompletedEvent {
+    pub job: Entity,
+    pub parent_job: Option<Entity>,
+    pub worker: Entity,
+    pub item: Entity,
+}
+
+fn delivery_complete(
     mut commands: Commands,
-    worker_query: Query<(Entity, &AssignedJob), (With<Hauler>, With<Delivering>, With<AtJobSite>)>,
-    delivery_query: Query<&Haul>,
+    mut delivery_complete_event_reader: EventReader<DeliveryCompletedEvent>,
+    mut haul_job_query: Query<Option<&Parent>, With<Haul>>,
+    mut haul_complete_event_writer: EventWriter<HaulCompletedEvent>,
 ) {
-    for (worker_entity, assigned_job) in &mut worker_query.iter() {
-        let delivery = delivery_query.get(assigned_job.0).unwrap();
-        commands.entity(worker_entity).remove::<Delivering>();
-        commands.entity(assigned_job.0).despawn_recursive();
+    for DeliveryCompletedEvent {
+        job: _,
+        parent_job: delivery_parent,
+        worker,
+        item,
+    } in delivery_complete_event_reader.iter()
+    {
+        if let Some((haul_entity, haul_parent)) =
+            delivery_parent.and_then(|e| haul_job_query.get_mut(e).ok().map(|p| (e, p)))
+        {
+            commands
+                .entity(*worker)
+                .remove::<Delivering>()
+                .remove::<AssignedJob>();
+            unassign_job(&mut commands, *worker);
+            commands.entity(haul_entity).despawn_recursive();
+            haul_complete_event_writer.send(HaulCompletedEvent {
+                job: haul_entity,
+                parent_job: haul_parent.map(|p| p.get()),
+                worker: *worker,
+                item: *item,
+            });
+        }
     }
 }

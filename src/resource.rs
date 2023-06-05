@@ -58,10 +58,13 @@ fn deregister_building_material(
     }
 }
 
+#[derive(Component)]
+pub struct Reserved;
+
 #[derive(SystemParam)]
 pub struct BuildingMaterialLocator<'w, 's> {
     building_material_registry: ResMut<'w, BuildingMaterialRegistry>,
-    query: Query<'w, 's, &'static GlobalTransform, With<BuildingMaterial>>,
+    query: Query<'w, 's, &'static GlobalTransform, (With<BuildingMaterial>, Without<Reserved>)>,
 }
 
 impl BuildingMaterialLocator<'_, '_> {

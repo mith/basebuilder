@@ -10,14 +10,14 @@ use crate::{
     cursor_position::CursorPosition,
     deliver,
     dwarf::DWARF_COLLISION_GROUP,
-    haul::Haul,
+    haul::{Haul, HaulCompletedEvent},
     hovered_tile::{HoveredTile, HoveredTileSet},
     job::{
-        AssignedJob, AssignedTo, AtJobSite, Commuting, Job, JobAssignedEvent, JobSite, StuckTimer,
-        Worker,
+        all_workers_eligible, job_assigned, AssignedJob, AssignedTo, AtJobSite, Commuting, Job,
+        JobAssignedEvent, JobSite, StuckTimer, Worker,
     },
     pathfinding::Pathfinding,
-    resource::{self, BuildingMaterial, BuildingMaterialLocator},
+    resource::{self, BuildingMaterial, BuildingMaterialLocator, Reserved},
     structure::Structure,
     terrain::Terrain,
 };
@@ -34,6 +34,9 @@ impl Plugin for BuildPlugin {
             )
             .add_systems((
                 designate_building_materials,
+                materials_delivered,
+                job_assigned::<ConstructionJob, Builder>,
+                all_workers_eligible::<ConstructionJob>,
                 start_building,
                 build_timer,
                 finish_building,
@@ -205,25 +208,89 @@ fn designate_building_materials(
                 .expect("Resource entity should have a transform");
             let x = resource_transform.translation().x;
             let y = resource_transform.translation().y;
-            commands
-                .entity(construction_entity)
-                .insert(WaitingForResources);
             let pickup_site = JobSite(vec![Vec2::new(x, y)]);
             let delivery_site = JobSite(vec![Vec2::new(
                 construction_transform.translation().x,
                 construction_transform.translation().y,
             )]);
-            commands.spawn((
-                Job,
-                Haul::new(
-                    resource_entity,
-                    1,
-                    construction_entity,
-                    pickup_site.clone(),
-                    delivery_site,
-                ),
-                pickup_site,
-            ));
+
+            let haul_job = commands
+                .spawn((
+                    Job,
+                    Haul::new(
+                        resource_entity,
+                        1,
+                        construction_entity,
+                        pickup_site.clone(),
+                        delivery_site,
+                    ),
+                    pickup_site,
+                ))
+                .id();
+
+            commands
+                .entity(construction_entity)
+                .insert(WaitingForResources)
+                .add_child(haul_job);
+
+            commands.entity(resource_entity).insert(Reserved);
+        }
+    }
+}
+
+#[derive(Component)]
+struct ConstructionJob(Entity);
+
+#[derive(Component, Default)]
+struct Builder;
+
+fn materials_delivered(
+    mut commands: Commands,
+    mut construction_query: Query<
+        (&GlobalTransform, &mut BuildingMaterialsNeeded),
+        With<WaitingForResources>,
+    >,
+    mut haul_completed_event_reader: EventReader<HaulCompletedEvent>,
+    building_material_query: Query<&Name, With<BuildingMaterial>>,
+) {
+    for completed_haul in haul_completed_event_reader.iter() {
+        if let Some((construction_entity, (construction_transform, mut resources_needed))) =
+            completed_haul
+                .parent_job
+                .and_then(|p| construction_query.get_mut(p).ok().map(|m| (p, m)))
+        {
+            let Some(material_name) = building_material_query.get(completed_haul.item).ok() else {
+                error!("Delivered item was not a building material");
+                continue;
+            };
+
+            if let Some((_, amount_needed)) = resources_needed
+                .0
+                .iter_mut()
+                .find(|(name, _)| name == material_name)
+            {
+                *amount_needed = amount_needed.saturating_sub(1);
+            }
+            resources_needed.0.retain(|(_, amount)| *amount > 0);
+
+            commands.entity(completed_haul.item).despawn_recursive();
+
+            if resources_needed.0.is_empty() {
+                let delivery_site = JobSite(vec![Vec2::new(
+                    construction_transform.translation().x,
+                    construction_transform.translation().y,
+                )]);
+                commands
+                    .entity(construction_entity)
+                    .remove::<WaitingForResources>()
+                    .with_children(|parent| {
+                        parent.spawn((
+                            Job,
+                            ConstructionJob(construction_entity),
+                            delivery_site.clone(),
+                        ));
+                    });
+            }
         }
     }
 }
@@ -242,15 +309,18 @@ impl Default for BuildTimer {
 
 fn start_building(
     mut commands: Commands,
-    worker_query: Query<(Entity, &AssignedJob), (Without<Constructing>, With<AtJobSite>)>,
-    assigned_build_job_query: Query<Entity, (With<UnderConstruction>, With<AssignedTo>, With<Job>)>,
+    worker_query: Query<
+        (Entity, &AssignedJob),
+        (Without<Constructing>, With<AtJobSite>, With<Builder>),
+    >,
+    construction_job_query: Query<&ConstructionJob>,
 ) {
     for (worker_entity, assigned_job) in &worker_query {
-        if assigned_build_job_query.contains(assigned_job.0) {
+        if let Ok(construction_entity) = construction_job_query.get(assigned_job.0).map(|job| job.0)
+        {
             commands
                 .entity(worker_entity)
-                .remove::<Commuting>()
-                .insert(BuildTimer::default());
+                .insert((BuildTimer::default(), Constructing(construction_entity)));
         }
     }
 }
@@ -261,11 +331,15 @@ fn build_timer(
         (&mut BuildTimer, &AssignedJob),
         (With<Worker>, With<Constructing>),
     >,
+    construction_job_query: Query<&ConstructionJob>,
     mut construction_site_query: Query<&mut UnderConstruction>,
 ) {
     for (mut timer, job) in &mut constructing_worker_query {
         if timer.0.tick(time.delta()).just_finished() {
-            if let Ok(mut construction_site) = construction_site_query.get_mut(job.0) {
+            if let Ok(mut construction_site) = construction_job_query
+                .get(job.0)
+                .and_then(|cj| construction_site_query.get_mut(cj.0))
+            {
                 construction_site.add_progress(20);
             }
         }
