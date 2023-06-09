@@ -1,32 +1,29 @@
 use std::vec;
 
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::TilemapGridSize;
-use bevy_proto::de;
-use bevy_rapier2d::prelude::{Collider, CollisionGroups, Group, RapierContext};
+use bevy_rapier2d::prelude::Group;
 
 use crate::{
-    ai_controller::{ArrivedAtTargetEvent, Path},
     cursor_position::CursorPosition,
-    deliver,
-    dwarf::DWARF_COLLISION_GROUP,
-    haul::{Haul, HaulCompletedEvent},
     hovered_tile::{HoveredTile, HoveredTileSet},
-    job::{
-        all_workers_eligible, job_assigned, AssignedJob, AssignedTo, AtJobSite, Commuting, Job,
-        JobAssignedEvent, JobSite, StuckTimer, Worker,
+    labor::job::{
+        all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Job, JobSite, Worker,
     },
-    pathfinding::Pathfinding,
-    resource::{self, BuildingMaterial, BuildingMaterialLocator, Reserved},
+    ladder::spawn_ladder,
+    resource::{BuildingMaterial, BuildingMaterialLocator, Reserved},
     structure::Structure,
     terrain::Terrain,
 };
+
+use super::haul::{Haul, HaulCompletedEvent};
 
 pub struct BuildPlugin;
 
 impl Plugin for BuildPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<BuildToolState>()
+            .add_event::<ConstructionCompletedEvent>()
             .add_system(
                 designate_construction
                     .run_if(state_exists_and_equals(BuildToolState::Placing))
@@ -53,6 +50,8 @@ pub enum BuildToolState {
 
 #[derive(Component)]
 pub struct Ghost;
+
+pub const CONSTRUCTION_COLLISION_GROUP: Group = Group::GROUP_7;
 
 #[derive(Component)]
 pub struct UnderConstruction {
@@ -114,6 +113,7 @@ fn designate_construction(
     ghost_query: Query<Entity, With<Ghost>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    asset_server: Res<AssetServer>,
 ) {
     let tilemap_grid_size = terrain_query.single();
     // round the cursor_position to the nearest tile
@@ -127,45 +127,18 @@ fn designate_construction(
         commands.entity(ghost_entity).despawn_recursive();
     }
 
+    let ladder = spawn_ladder(
+        &mut commands,
+        &asset_server,
+        rounded_cursor_position.extend(BUILDING_LAYER_Z),
+    );
     if mouse_button_input.just_pressed(MouseButton::Left) && hovered_tile_query.is_empty() {
-        commands.spawn((
+        commands.entity(ladder).insert((
             UnderConstruction::default(),
             BuildingMaterialsNeeded::new(vec![(Name::new("Log"), 1)]),
-            MaterialMesh2dBundle {
-                transform: Transform::from_xyz(
-                    rounded_cursor_position.x,
-                    rounded_cursor_position.y,
-                    BUILDING_LAYER_Z,
-                ),
-                material: materials.add(Color::rgba(0.0, 1.0, 0.0, 0.3).into()),
-                mesh: meshes
-                    .add(Mesh::from(shape::Quad::new(Vec2::new(
-                        tilemap_grid_size.x,
-                        tilemap_grid_size.y,
-                    ))))
-                    .into(),
-                ..default()
-            },
         ));
     } else {
-        commands.spawn((
-            Ghost,
-            MaterialMesh2dBundle {
-                transform: Transform::from_xyz(
-                    rounded_cursor_position.x,
-                    rounded_cursor_position.y,
-                    BUILDING_LAYER_Z,
-                ),
-                material: materials.add(Color::rgba(0.0, 1.0, 0.0, 0.5).into()),
-                mesh: meshes
-                    .add(Mesh::from(shape::Quad::new(Vec2::new(
-                        tilemap_grid_size.x,
-                        tilemap_grid_size.y,
-                    ))))
-                    .into(),
-                ..default()
-            },
-        ));
+        commands.entity(ladder).insert(Ghost);
     }
 }
 
@@ -181,12 +154,12 @@ fn designate_building_materials(
     building_material_locator: BuildingMaterialLocator,
     building_material_query: Query<&GlobalTransform, With<BuildingMaterial>>,
 ) {
-    for (construction_entity, construction_transform, mut resources_needed) in
+    for (construction_entity, construction_transform, resources_needed) in
         &mut construction_query.iter()
     {
         let mut closest_resource = None;
         let mut closest_distance = f32::MAX;
-        for (resource_name, amount) in resources_needed.0.iter() {
+        for (resource_name, _amount) in resources_needed.0.iter() {
             if let Some(resource_entity) = building_material_locator
                 .get_closest(resource_name, construction_transform.translation())
             {
@@ -346,26 +319,25 @@ fn build_timer(
     }
 }
 
+pub struct ConstructionCompletedEvent {
+    pub construction_site: Entity,
+}
+
 fn finish_building(
     mut commands: Commands,
-    construction_site_query: Query<
-        (Entity, &UnderConstruction, &Handle<ColorMaterial>),
-        Changed<UnderConstruction>,
-    >,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    construction_site_query: Query<(Entity, &UnderConstruction), Changed<UnderConstruction>>,
+    mut construction_completed_event_writer: EventWriter<ConstructionCompletedEvent>,
 ) {
-    for (construction_site_entity, construction_site, material_handle) in
-        &mut construction_site_query.iter()
-    {
+    for (construction_site_entity, construction_site) in &mut construction_site_query.iter() {
         if construction_site.finished() {
             commands
                 .entity(construction_site_entity)
                 .remove::<UnderConstruction>()
                 .insert(Structure);
 
-            if let Some(material) = materials.get_mut(material_handle) {
-                material.color = material.color.with_a(1.);
-            }
+            construction_completed_event_writer.send(ConstructionCompletedEvent {
+                construction_site: construction_site_entity,
+            });
         }
     }
 }

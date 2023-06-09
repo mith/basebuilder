@@ -6,8 +6,8 @@ use rand::{seq::IteratorRandom, SeedableRng};
 use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
-    chop_tree::PICKER_COLLISION_GROUP,
     health::Health,
+    labor::chop_tree::PICKER_COLLISION_GROUP,
     resource::BuildingMaterial,
     terrain::{TerrainSet, TerrainState, TERRAIN_COLLISION_GROUP},
     terrain_settings::TerrainSettings,
@@ -45,10 +45,11 @@ fn spawn_trees(
     mut trees_state: ResMut<NextState<TreesState>>,
 ) {
     let mut rng = Xoshiro256StarStar::seed_from_u64(terrain_settings.seed as u64);
-    let possible_x_pos: Vec<f32> = (-15..=15i32)
+    let terrain_half_width = terrain_settings.width as f32 / 2.0 / 3.;
+    let possible_x_pos: Vec<f32> = (-terrain_half_width as i32..=terrain_half_width as i32)
         .filter(|x| (*x).abs() > 5)
-        .map(|x| x as f32 * terrain_settings.cell_size)
-        .choose_multiple(&mut rng, 1);
+        .map(|x| x as f32 * 3. * terrain_settings.cell_size)
+        .choose_multiple(&mut rng, 25);
     for x in possible_x_pos {
         // pick location within the 10 center cells of the map
         // y location is always the top of the map

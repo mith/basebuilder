@@ -3,10 +3,11 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
-    ai_controller::Path,
     cursor_position::CursorPosition,
     designation_layer::Designated,
-    job::{all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Job, JobSite, Worker},
+    labor::job::{
+        all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Complete, Job, JobSite, Worker,
+    },
     terrain::TerrainSet,
     tree::{Tree, TreeDamageEvent, TreeDestroyedEvent, TREE_COLLISION_GROUP},
 };
@@ -15,14 +16,16 @@ pub struct FellingPlugin;
 
 impl Plugin for FellingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_state::<FellingToolState>().add_systems((
-            mark_trees.run_if(state_exists_and_equals(FellingToolState::Designating)),
-            job_assigned::<FellingJob, Feller>,
-            all_workers_eligible::<FellingJob>,
-            fell,
-            felling_timer.before(TerrainSet),
-            finish_felling,
-        ));
+        app.add_event::<FellingCompleteEvent>()
+            .add_state::<FellingToolState>()
+            .add_systems((
+                mark_trees.run_if(state_exists_and_equals(FellingToolState::Designating)),
+                job_assigned::<FellingJob, Feller>,
+                all_workers_eligible::<FellingJob>,
+                fell,
+                felling_timer.before(TerrainSet),
+                finish_felling,
+            ));
     }
 }
 
@@ -91,7 +94,10 @@ fn fell(
     felling_job_query: Query<&FellingJob>,
 ) {
     for (feller_entity, assigned_job) in &feller_query {
-        let felling_job = felling_job_query.get(assigned_job.0).unwrap();
+        let Ok(felling_job) = felling_job_query.get(assigned_job.0) else {
+            error!("Feller {:?} has no felling job", feller_entity);
+            continue;
+        };
         commands.entity(feller_entity).insert((
             Felling(felling_job.0),
             FellingTimer(Timer::from_seconds(1.0, TimerMode::Repeating)),
@@ -114,27 +120,42 @@ fn felling_timer(
     }
 }
 
+pub struct FellingCompleteEvent {
+    pub job: Entity,
+    pub parent_job: Option<Entity>,
+    pub worker: Entity,
+    pub tree: Entity,
+}
+
 fn finish_felling(
     mut commands: Commands,
     mut tree_destroyed_event_reader: EventReader<TreeDestroyedEvent>,
-    feller_query: Query<(Entity, &Felling), With<Worker>>,
+    feller_query: Query<(Entity, &Felling, &AssignedJob), With<Worker>>,
+    parent_job_query: Query<&Parent, With<Job>>,
+    mut felling_complete_event_writer: EventWriter<FellingCompleteEvent>,
 ) {
     for tree_destroyed_event in tree_destroyed_event_reader.iter() {
-        for (feller, felling) in &mut feller_query.iter() {
+        for (feller, felling, assigned_job) in &mut feller_query.iter() {
             if felling.0 == tree_destroyed_event.tree {
-                remove_feller_job(&mut commands, feller);
+                let felling_job = assigned_job.0;
+                // Mark the job as complete
+                commands.entity(felling_job).insert(Complete);
+                // Remove the feller and felling from worker
+                commands
+                    .entity(feller)
+                    .remove::<Feller>()
+                    .remove::<Felling>();
+
+                // Check if the parent is a job
+                let parent_job = parent_job_query.get(assigned_job.0).ok().map(|p| p.get());
+
+                felling_complete_event_writer.send(FellingCompleteEvent {
+                    job: felling_job,
+                    parent_job,
+                    worker: feller,
+                    tree: tree_destroyed_event.tree,
+                });
             }
         }
     }
-}
-
-fn remove_feller_job(commands: &mut Commands, feller: Entity) {
-    commands
-        .entity(feller)
-        .remove::<Feller>()
-        .remove::<AtJobSite>()
-        .remove::<Felling>()
-        .remove::<FellingTimer>()
-        .remove::<AssignedJob>()
-        .remove::<Path>();
 }

@@ -10,9 +10,7 @@ use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
     ai_controller::AiControlled,
-    app_state::AppState,
-    gravity::Gravity,
-    job::Worker,
+    labor::job::Worker,
     movement::{Climber, Jumper, Walker},
     terrain::{TerrainSet, TerrainState, TERRAIN_COLLISION_GROUP},
     terrain_settings::TerrainSettings,

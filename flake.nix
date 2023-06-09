@@ -41,10 +41,11 @@
           clang
           pkg-config
         ];
+        rustsrc = craneLib.cleanCargoSource (craneLib.path ./.);
       in {
         packages.basebuilder-bin = craneLib.buildPackage {
           name = "basebuilder-bin";
-          src = craneLib.cleanCargoSource ./.;
+          src = rustsrc;
           inherit buildInputs;
           inherit nativeBuildInputs;
         };
@@ -80,7 +81,7 @@
           craneWasm = crane.lib.${system}.overrideToolchain toolchainWasm;
         in
           craneWasm.buildPackage {
-            src = craneLib.cleanCargoSource ./.;
+            src = rustsrc;
             CARGO_BUILD_TARGET = target;
             CARGO_PROFILE = "release";
             inherit nativeBuildInputs;

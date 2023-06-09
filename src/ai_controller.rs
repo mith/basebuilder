@@ -2,7 +2,7 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 
 use crate::{
     gravity::GravitySet,
-    movement::{Climbing, Falling, MovementSet, Walker},
+    movement::{Falling, MovementSet, Walker},
     terrain::{TerrainParams, TerrainSet, TerrainState, TileDestroyedEvent},
 };
 
@@ -11,16 +11,9 @@ pub struct AiControllerPlugin;
 impl Plugin for AiControllerPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ArrivedAtTargetEvent>()
-            .register_type::<MoveTo>()
             .register_type::<Path>()
             .add_systems(
-                (
-                    invalidate_paths,
-                    apply_system_buffers,
-                    update_target,
-                    follow_path,
-                    move_to_removed,
-                )
+                (invalidate_paths, apply_system_buffers, follow_path)
                     .chain()
                     .in_set(AiControllerSet)
                     .distributive_run_if(in_state(TerrainState::Spawned))
@@ -36,12 +29,6 @@ pub struct AiControllerSet;
 
 #[derive(Component)]
 pub struct AiControlled;
-
-#[derive(Component, Reflect)]
-pub struct MoveTo {
-    pub entity: Option<Entity>,
-    pub position: Vec2,
-}
 
 #[derive(Component, Reflect, Clone, FromReflect)]
 pub struct Path(pub Vec<UVec2>);
@@ -118,24 +105,6 @@ fn invalidate_paths(
     if !destroyed_tiles.is_empty() {
         for entity in &mut path_entity_query.iter() {
             commands.entity(entity).remove::<Path>();
-        }
-    }
-}
-
-fn update_target(mut target_query: Query<&mut MoveTo>, entity_query: Query<&Transform>) {
-    for mut target in &mut target_query {
-        if let Some(entity) = target.entity {
-            if let Ok(entity_transform) = entity_query.get(entity) {
-                target.position = entity_transform.translation.xy();
-            }
-        }
-    }
-}
-
-fn move_to_removed(mut removed: RemovedComponents<MoveTo>, mut target_query: Query<&mut Walker>) {
-    for entity in &mut removed {
-        if let Ok(mut target) = target_query.get_mut(entity) {
-            target.move_direction = None;
         }
     }
 }

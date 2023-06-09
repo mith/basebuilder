@@ -127,7 +127,6 @@ fn unhighlight_designated_tile(
 }
 
 fn highlight_designated_mesh(
-    mut commands: Commands,
     mut materials_query: Query<&mut Handle<ColorMaterial>, Added<Designated>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {

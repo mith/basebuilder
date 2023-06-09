@@ -1,15 +1,18 @@
 use bevy::{
     math::Vec3Swizzles,
-    prelude::*,
+    prelude::{
+        apply_system_buffers, Added, App, Commands, Component, DespawnRecursiveExt, Entity,
+        GlobalTransform, IntoSystemConfigs, Parent, Plugin, Query, RemovedComponents, Res,
+        SystemSet, Vec2, With, Without,
+    },
+    reflect::Reflect,
+    time::{Time, Timer},
     utils::{HashMap, HashSet},
 };
-use bevy_ecs_tilemap::tiles::TilePos;
-use bevy_rapier2d::prelude::KinematicCharacterControllerOutput;
 
-use crate::{
-    ai_controller::{MoveTo, Path},
-    pathfinding::Pathfinding,
-};
+use crate::{ai_controller::Path, pathfinding::Pathfinding};
+
+use super::commute::Commuting;
 
 pub struct JobPlugin;
 
@@ -21,24 +24,32 @@ impl Plugin for JobPlugin {
             .register_type::<BlacklistedWorkers>()
             .register_type::<PathableWorkers>()
             .register_type::<EligibleWorkers>()
-            .add_systems((
-                find_pathable_workers,
-                assign_job,
-                blacklist_timer,
-                stuck,
-                stuck_timer,
-            ))
+            .add_systems((find_pathable_workers, blacklist_timer))
             .add_systems(
                 (
                     apply_system_buffers,
-                    job_unassigned,
+                    assign_jobs,
                     apply_system_buffers,
-                    commute,
+                    job_completed,
+                    apply_system_buffers,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(JobAssignmentSet),
+            )
+            .add_systems(
+                (
+                    apply_system_buffers,
+                    worker_assignment_removed,
+                    apply_system_buffers,
+                )
+                    .chain()
+                    .in_set(JobAssignmentSet),
             );
     }
 }
+
+#[derive(SystemSet, Default, Debug, Hash, PartialEq, Eq, Clone)]
+pub struct JobAssignmentSet;
 
 #[derive(Component)]
 pub struct Job;
@@ -53,13 +64,10 @@ pub struct AssignedJob(pub Entity);
 pub struct AssignedTo(pub Entity);
 
 #[derive(Component, Reflect)]
-pub struct BlacklistedWorkers(HashMap<Entity, Timer>);
+pub struct BlacklistedWorkers(pub HashMap<Entity, Timer>);
 
 #[derive(Component, Clone)]
 pub struct JobSite(pub Vec<Vec2>);
-
-#[derive(Component)]
-pub struct Commuting;
 
 #[derive(Component)]
 pub struct AtJobSite;
@@ -106,7 +114,7 @@ pub fn find_pathable_workers(
 #[derive(Component, Reflect)]
 pub struct EligibleWorkers(pub HashSet<Entity>);
 
-pub fn assign_job(
+pub fn assign_jobs(
     mut commands: Commands,
     unassigned_job_query: Query<
         (
@@ -155,11 +163,9 @@ pub fn assign_job(
 
         if let Some((worker_entity, path)) = closest_available_worker {
             // assign job to worker
-            commands.entity(worker_entity).insert((
-                AssignedJob(job_entity),
-                Commuting,
-                path.clone(),
-            ));
+            commands
+                .entity(worker_entity)
+                .insert((AssignedJob(job_entity), path.clone()));
             commands
                 .entity(job_entity)
                 .insert(AssignedTo(worker_entity));
@@ -194,73 +200,63 @@ pub fn all_workers_eligible<J>(
             .insert(EligibleWorkers(HashSet::from_iter(worker_query.iter())));
     }
 }
-
-fn commute(
-    mut commands: Commands,
-    workers_query: Query<
-        (Entity, &AssignedJob, &GlobalTransform, Option<&Path>),
-        Without<AtJobSite>,
-    >,
-    job_query: Query<&JobSite>,
-    pathfinder: Pathfinding,
-) {
-    for (worker_entity, assigned_job, worker_transform, opt_path) in &workers_query {
-        // if the worker already has a path, add commute component and continue
-        if opt_path.is_some() {
-            continue;
-        }
-
-        let job_site = job_query
-            .get(assigned_job.0)
-            .expect("Worker has job without job site");
-
-        // check if worker is already at job site
-        if job_site.0.iter().any(|job_site_world_pos| {
-            worker_transform
-                .translation()
-                .xy()
-                .distance(*job_site_world_pos)
-                < 10.
-        }) {
-            commands
-                .entity(worker_entity)
-                .insert(AtJobSite)
-                .remove::<Commuting>();
-            continue;
-        }
-
-        // find job site tile with the shortest path from worker position
-        let paths = job_site.0.iter().filter_map(|job_site_world_pos| {
-            pathfinder.find_path(worker_transform.translation().xy(), *job_site_world_pos)
-        });
-        let shortest_path = paths.min_by(|path_a, path_b| path_a.len().cmp(&path_b.len()));
-
-        if let Some(path) = shortest_path {
-            commands.entity(worker_entity).insert(Commuting);
-            commands.entity(worker_entity).insert(Path(path));
-        } else {
-            // no path found, start stucktimer
-            commands.entity(worker_entity).insert(StuckTimer::default());
-        }
-    }
-}
-
-fn job_unassigned(
+fn worker_assignment_removed(
     mut commands: Commands,
     mut removed_assigned_job: RemovedComponents<AssignedJob>,
 ) {
     for unassigned_worker_entity in removed_assigned_job.iter() {
-        unassign_job(&mut commands, unassigned_worker_entity);
+        remove_commute(&mut commands, unassigned_worker_entity);
     }
 }
 
-pub fn unassign_job(commands: &mut Commands, unassigned_worker_entity: Entity) {
+pub fn remove_commute(commands: &mut Commands, worker_entity: Entity) {
     commands
-        .entity(unassigned_worker_entity)
+        .entity(worker_entity)
         .remove::<Commuting>()
-        .remove::<JobSite>()
-        .remove::<AtJobSite>();
-    commands.entity(unassigned_worker_entity).remove::<Path>();
+        .remove::<AtJobSite>()
+        .remove::<Path>();
+}
+
+pub fn assign_job(commands: &mut Commands, worker_entity: Entity, job_entity: Entity) {
+    commands
+        .entity(worker_entity)
+        .insert(AssignedJob(job_entity));
+    commands
+        .entity(job_entity)
+        .insert(AssignedTo(worker_entity));
+}
+
+#[derive(Component)]
+pub struct Complete;
+
+fn job_completed(
+    mut commands: Commands,
+    mut completed_job_query: Query<
+        (Entity, &AssignedTo, Option<&Parent>),
+        (With<Job>, Added<Complete>),
+    >,
+    job_query: Query<&Job>,
+) {
+    // If the completed job has a parent, assign the worker to the parent
+    // If the job has no parent, unassign the worker
+    for (job_entity, assigned_to, opt_parent) in &mut completed_job_query {
+        if let Some(parent) = opt_parent.filter(|p| job_query.contains(p.get())) {
+            commands
+                .entity(parent.get())
+                .insert(AssignedTo(assigned_to.0));
+
+            remove_commute(&mut commands, assigned_to.0);
+
+            commands
+                .entity(assigned_to.0)
+                .insert(AssignedJob(parent.get()));
+        } else {
+            commands.entity(assigned_to.0).remove::<AssignedJob>();
+            remove_commute(&mut commands, assigned_to.0);
+        }
+
+        commands.entity(job_entity).despawn_recursive();
+    }
 }
 
 fn blacklist_timer(time: Res<Time>, mut blacklisted_worker_query: Query<&mut BlacklistedWorkers>) {
@@ -274,72 +270,6 @@ fn blacklist_timer(time: Res<Time>, mut blacklisted_worker_query: Query<&mut Bla
         }
         for worker_entity in to_remove {
             blacklisted_workers.0.remove(&worker_entity);
-        }
-    }
-}
-
-#[derive(Component)]
-pub struct StuckTimer(Timer);
-
-impl Default for StuckTimer {
-    fn default() -> Self {
-        Self(Timer::from_seconds(1., TimerMode::Once))
-    }
-}
-
-fn stuck(
-    mut commands: Commands,
-    worker_query: Query<
-        (
-            Entity,
-            Option<&StuckTimer>,
-            Option<&MoveTo>,
-            &KinematicCharacterControllerOutput,
-        ),
-        (With<Worker>, With<AssignedJob>),
-    >,
-) {
-    for (worker_entity, opt_stuck_timer, opt_move_to, controller_output) in &worker_query {
-        if opt_move_to.is_none() && opt_stuck_timer.is_some() {
-            commands.entity(worker_entity).remove::<StuckTimer>();
-            continue;
-        }
-
-        let standing_still = controller_output.effective_translation.x == 0.
-            && controller_output.effective_translation.y == 0.;
-        if !standing_still && opt_stuck_timer.is_some() {
-            commands.entity(worker_entity).remove::<StuckTimer>();
-        } else if standing_still && opt_stuck_timer.is_none() {
-            commands
-                .entity(worker_entity)
-                .insert(StuckTimer(Timer::from_seconds(1., TimerMode::Once)));
-        }
-    }
-}
-
-fn stuck_timer(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut stuck_timer_query: Query<(Entity, &mut StuckTimer, &AssignedJob), With<Worker>>,
-    mut blacklisted_workers_query: Query<&mut BlacklistedWorkers, With<Job>>,
-) {
-    for (worker_entity, mut stuck_timer, assigned_job) in &mut stuck_timer_query {
-        if stuck_timer.0.tick(time.delta()).just_finished() {
-            commands.entity(worker_entity).remove::<StuckTimer>();
-            commands.entity(worker_entity).remove::<AssignedJob>();
-
-            commands.entity(assigned_job.0).remove::<AssignedTo>();
-            if let Ok(mut blacklisted_workers) = blacklisted_workers_query.get_mut(assigned_job.0) {
-                blacklisted_workers
-                    .0
-                    .insert(worker_entity, Timer::from_seconds(5., TimerMode::Once));
-            } else {
-                let map =
-                    HashMap::from([(worker_entity, Timer::from_seconds(5., TimerMode::Once))]);
-                commands
-                    .entity(assigned_job.0)
-                    .insert(BlacklistedWorkers(map));
-            }
         }
     }
 }

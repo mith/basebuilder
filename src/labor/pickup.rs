@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
-use crate::job::{
-    all_workers_eligible, job_assigned, unassign_job, AssignedJob, AtJobSite, JobSite, Worker,
+use crate::labor::job::{
+    all_workers_eligible, job_assigned, remove_commute, AssignedJob, AtJobSite, Complete, JobSite,
+    Worker,
 };
 
 pub struct PickupPlugin;
@@ -53,12 +54,7 @@ fn pickup(
 
         *pickup_transform = Transform::from_translation(Vec3::new(0.0, 0.0, 1.0));
 
-        commands.entity(assigned_job.0).despawn_recursive();
-        commands
-            .entity(worker_entity)
-            .remove::<AssignedJob>()
-            .remove::<PickingUp>();
-        unassign_job(&mut commands, worker_entity);
+        commands.entity(assigned_job.0).insert(Complete);
 
         pickup_complete_event_writer.send(PickupCompletedEvent {
             job: assigned_job.0,

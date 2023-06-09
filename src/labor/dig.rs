@@ -5,7 +5,9 @@ use crate::{
     ai_controller::Path,
     designation_layer::Designated,
     hovered_tile::HoveredTile,
-    job::{all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Job, JobSite, Worker},
+    labor::job::{
+        all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Job, JobSite, Worker,
+    },
     terrain::{TerrainParams, TerrainSet, TileDamageEvent, TileDestroyedEvent},
 };
 

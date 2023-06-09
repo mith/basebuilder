@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 
-use crate::job::{
-    all_workers_eligible, job_assigned, unassign_job, AssignedJob, AtJobSite, JobAssignedEvent,
-};
+use crate::labor::job::{all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Complete};
 
 pub struct DeliverPlugin;
 
@@ -42,13 +40,9 @@ fn complete_delivery(
     for (worker_entity, assigned_job) in &mut worker_query.iter() {
         let (delivery, parent_job) = delivery_query.get(assigned_job.0).unwrap();
         commands.entity(delivery.to).add_child(delivery.load);
-        commands.entity(assigned_job.0).despawn_recursive();
-        commands
-            .entity(worker_entity)
-            .remove::<Delivering>()
-            .remove::<AssignedJob>();
 
-        unassign_job(&mut commands, worker_entity);
+        commands.entity(assigned_job.0).insert(Complete);
+
         delivery_complete_event_writer.send(DeliveryCompletedEvent {
             job: assigned_job.0,
             parent_job: parent_job.map(|e| e.get()),
