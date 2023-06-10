@@ -50,7 +50,7 @@ fn camera_zoom(
     for event in mouse_wheel_events.iter() {
         for (mut transform, mut ortho, camera) in camera_query.iter_mut() {
             let old_scale = ortho.scale;
-            let mut zoom_change = ortho.scale * event.y * camera.zoom_speed;
+            let mut zoom_change = ortho.scale * event.y.clamp(-1., 1.) * camera.zoom_speed;
             ortho.scale -= zoom_change;
 
             if ortho.scale < camera.min_zoom {
@@ -66,7 +66,7 @@ fn camera_zoom(
             let from_center = cursor_position
                 - Vec2::new(primary_window.width() / 2., primary_window.height() / 2.);
 
-            let scaled_move = from_center * event.y * zoom_change.abs();
+            let scaled_move = from_center * event.y.clamp(-1., 1.) * zoom_change.abs();
             transform.translation += Vec3::new(scaled_move.x, scaled_move.y, 0.);
         }
     }
