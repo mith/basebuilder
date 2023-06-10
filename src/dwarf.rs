@@ -11,8 +11,9 @@ use rand_xoshiro::Xoshiro256StarStar;
 use crate::{
     ai_controller::AiControlled,
     labor::job::Worker,
+    main_state::MainState,
     movement::{Climber, Jumper, Walker},
-    terrain::{TerrainSet, TerrainState, TERRAIN_COLLISION_GROUP},
+    terrain::{TerrainSet, TERRAIN_COLLISION_GROUP},
     terrain_settings::TerrainSettings,
 };
 
@@ -22,7 +23,7 @@ impl Plugin for DwarfPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<DwarvesState>().add_system(
             spawn_dwarves
-                .in_schedule(OnEnter(TerrainState::Spawned))
+                .in_schedule(OnEnter(MainState::Game))
                 .after(TerrainSet),
         );
     }

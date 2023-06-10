@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
 use crate::labor::job::{
-    all_workers_eligible, job_assigned, remove_commute, AssignedJob, AtJobSite, Complete, JobSite,
-    Worker,
+    all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Complete, Worker,
 };
 
 pub struct PickupPlugin;

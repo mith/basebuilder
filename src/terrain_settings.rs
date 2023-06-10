@@ -82,6 +82,7 @@ fn setup_terrain_settings(
             ore_incidences,
             seed: terrain_settings.seed,
         });
+        info!("Terrain settings loaded");
         state.set(TerrainSettingsState::Loaded);
     }
 }

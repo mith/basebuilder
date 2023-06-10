@@ -1,17 +1,19 @@
-use bevy::{prelude::*, render::mesh, sprite::Mesh2dHandle};
+use bevy::prelude::*;
 use bevy_ecs_tilemap::{
     prelude::*,
     tiles::{TileColor, TilePos, TileStorage},
     TilemapBundle,
 };
 
-use crate::{app_state::AppState, terrain::TileDestroyedEvent, terrain_settings::TerrainSettings};
+use crate::{
+    main_state::MainState, terrain::TileDestroyedEvent, terrain_settings::TerrainSettings,
+};
 
 pub struct DesignationLayerPlugin;
 
 impl Plugin for DesignationLayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(setup_designation_layer.in_schedule(OnEnter(AppState::Game)))
+        app.add_system(setup_designation_layer.in_schedule(OnEnter(MainState::Game)))
             .add_systems(
                 (
                     apply_system_buffers,
@@ -20,7 +22,7 @@ impl Plugin for DesignationLayerPlugin {
                     highlight_designated_mesh,
                 )
                     .chain()
-                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(OnUpdate(MainState::Game))
                     .in_set(DesignationLayerSet),
             );
     }

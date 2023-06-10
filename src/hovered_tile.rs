@@ -6,8 +6,8 @@ use bevy_ecs_tilemap::{
 };
 
 use crate::{
-    app_state::AppState,
     cursor_position::CursorPosition,
+    main_state::MainState,
     terrain::{TerrainParams, TerrainSet, TileDestroyedEvent},
     terrain_settings::TerrainSettings,
 };
@@ -16,7 +16,7 @@ pub struct HoveredTilePlugin;
 
 impl Plugin for HoveredTilePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(setup_hovered_layer.in_schedule(OnEnter(AppState::Game)))
+        app.add_system(setup_hovered_layer.in_schedule(OnEnter(MainState::Game)))
             .add_systems(
                 (
                     hovered_tile,
@@ -25,7 +25,7 @@ impl Plugin for HoveredTilePlugin {
                     unhighlight_hovered_tile,
                 )
                     .chain()
-                    .in_set(OnUpdate(AppState::Game))
+                    .in_set(OnUpdate(MainState::Game))
                     .in_set(HoveredTileSet)
                     .after(TerrainSet),
             );

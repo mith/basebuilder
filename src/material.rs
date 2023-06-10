@@ -49,6 +49,7 @@ fn setup_materials(
 ) {
     if let Some(materials) = materials_assets.get(&materials.0) {
         commands.insert_resource(MaterialProperties(materials.0.clone()));
+        info!("Materials loaded");
         state.set(MaterialsState::Loaded);
     }
 }

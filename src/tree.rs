@@ -8,8 +8,9 @@ use rand_xoshiro::Xoshiro256StarStar;
 use crate::{
     health::Health,
     labor::chop_tree::PICKER_COLLISION_GROUP,
+    main_state::MainState,
     resource::BuildingMaterial,
-    terrain::{TerrainSet, TerrainState, TERRAIN_COLLISION_GROUP},
+    terrain::{TerrainSet, TERRAIN_COLLISION_GROUP},
     terrain_settings::TerrainSettings,
 };
 
@@ -22,7 +23,7 @@ impl Plugin for TreePlugin {
             .add_event::<TreeDestroyedEvent>()
             .add_system(
                 spawn_trees
-                    .in_schedule(OnEnter(TerrainState::Spawned))
+                    .in_schedule(OnEnter(MainState::Game))
                     .after(TerrainSet),
             )
             .add_systems((update_tree_health, destroy_trees));

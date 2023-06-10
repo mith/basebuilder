@@ -2,8 +2,9 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 
 use crate::{
     gravity::GravitySet,
+    main_state::MainState,
     movement::{Falling, MovementSet, Walker},
-    terrain::{TerrainParams, TerrainSet, TerrainState, TileDestroyedEvent},
+    terrain::{TerrainParams, TerrainSet, TileDestroyedEvent},
 };
 
 pub struct AiControllerPlugin;
@@ -16,7 +17,7 @@ impl Plugin for AiControllerPlugin {
                 (invalidate_paths, apply_system_buffers, follow_path)
                     .chain()
                     .in_set(AiControllerSet)
-                    .distributive_run_if(in_state(TerrainState::Spawned))
+                    .distributive_run_if(in_state(MainState::Game))
                     .before(GravitySet)
                     .before(MovementSet)
                     .after(TerrainSet),

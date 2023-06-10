@@ -1,16 +1,17 @@
 use bevy::prelude::*;
 
-pub struct AppStatePlugin;
+pub struct MainStatePlugin;
 
-impl Plugin for AppStatePlugin {
+impl Plugin for MainStatePlugin {
     fn build(&self, app: &mut App) {
-        app.add_state::<AppState>();
+        app.add_state::<MainState>();
     }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, States)]
-pub enum AppState {
+pub enum MainState {
     #[default]
     Loading,
+    MapGeneration,
     Game,
 }

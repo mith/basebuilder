@@ -2,7 +2,6 @@ use bevy::prelude::*;
 use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::{
-    ai_controller::Path,
     designation_layer::Designated,
     hovered_tile::HoveredTile,
     labor::job::{
@@ -11,11 +10,14 @@ use crate::{
     terrain::{TerrainParams, TerrainSet, TileDamageEvent, TileDestroyedEvent},
 };
 
+use super::job::Complete;
+
 pub struct DigPlugin;
 
 impl Plugin for DigPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Digging>()
+        app.add_event::<DiggingCompleteEvent>()
+            .register_type::<Digging>()
             .register_type::<DiggingTimer>()
             .register_type::<DigToolState>()
             .add_state::<DigToolState>()
@@ -114,33 +116,43 @@ fn dig_timer(
     }
 }
 
+pub struct DiggingCompleteEvent {
+    pub job: Entity,
+    pub parent_job: Option<Entity>,
+    pub worker: Entity,
+    pub tile: Entity,
+}
+
 fn finish_digging(
     mut commands: Commands,
     mut tile_destroyed_event_reader: EventReader<TileDestroyedEvent>,
-    digging_worker_query: Query<(&Digging, Entity), With<Worker>>,
-    mut unassigned_workers: RemovedComponents<AssignedJob>,
+    digging_worker_query: Query<(&Digging, Entity, &AssignedJob), With<Worker>>,
+    parent_job_query: Query<&Parent, With<Job>>,
+    mut digging_complete_event_writer: EventWriter<DiggingCompleteEvent>,
 ) {
-    for unassigned_worker_entity in unassigned_workers.iter() {
-        if digging_worker_query.get(unassigned_worker_entity).is_ok() {
-            remove_digging_job(&mut commands, unassigned_worker_entity);
-        }
-    }
     for tile_destroyed_event in tile_destroyed_event_reader.iter() {
-        for (digging, worker_entity) in &digging_worker_query {
+        for (digging, worker_entity, assigned_job) in &digging_worker_query {
             if digging.0 == tile_destroyed_event.entity {
-                remove_digging_job(&mut commands, worker_entity);
+                let digging_job = assigned_job.0;
+                // Mark the job as complete
+                commands.entity(digging_job).insert(Complete);
+                // Remove the feller and digging from worker
+                commands
+                    .entity(worker_entity)
+                    .remove::<Digger>()
+                    .remove::<Digging>()
+                    .remove::<DiggingTimer>();
+
+                // Retrieve the parent if it is a job
+                let parent_job = parent_job_query.get(digging_job).ok().map(|p| p.get());
+
+                digging_complete_event_writer.send(DiggingCompleteEvent {
+                    job: digging_job,
+                    parent_job,
+                    worker: worker_entity,
+                    tile: tile_destroyed_event.entity,
+                });
             }
         }
     }
-}
-
-fn remove_digging_job(commands: &mut Commands, unassigned_worker_entity: Entity) {
-    commands
-        .entity(unassigned_worker_entity)
-        .remove::<Digger>()
-        .remove::<AtJobSite>()
-        .remove::<Digging>()
-        .remove::<DiggingTimer>()
-        .remove::<AssignedJob>()
-        .remove::<Path>();
 }

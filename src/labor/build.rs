@@ -12,7 +12,6 @@ use crate::{
     },
     ladder::spawn_ladder,
     resource::{BuildingMaterial, BuildingMaterialLocator, Reserved},
-    structure::Structure,
     terrain::Terrain,
 };
 
@@ -47,6 +46,9 @@ pub enum BuildToolState {
     Inactive,
     Placing,
 }
+
+#[derive(Component)]
+pub struct Structure;
 
 #[derive(Component)]
 pub struct Ghost;
@@ -111,8 +113,8 @@ fn designate_construction(
     hovered_tile_query: Query<&HoveredTile>,
     terrain_query: Query<&TilemapGridSize, With<Terrain>>,
     ghost_query: Query<Entity, With<Ghost>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<ColorMaterial>>,
+    _meshes: ResMut<Assets<Mesh>>,
     asset_server: Res<AssetServer>,
 ) {
     let tilemap_grid_size = terrain_query.single();
@@ -147,7 +149,7 @@ struct WaitingForResources;
 
 fn designate_building_materials(
     mut commands: Commands,
-    mut construction_query: Query<
+    construction_query: Query<
         (Entity, &GlobalTransform, &mut BuildingMaterialsNeeded),
         Without<WaitingForResources>,
     >,

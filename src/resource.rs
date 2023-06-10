@@ -32,7 +32,7 @@ impl BuildingMaterialRegistry {
 }
 
 fn register_building_material(
-    mut commands: Commands,
+    _commands: Commands,
     mut building_material_registry: ResMut<BuildingMaterialRegistry>,
     building_material_query: Query<(Entity, &Name), Added<BuildingMaterial>>,
 ) {
@@ -46,7 +46,7 @@ fn register_building_material(
 }
 
 fn deregister_building_material(
-    mut commands: Commands,
+    _commands: Commands,
     mut resource_registry: ResMut<BuildingMaterialRegistry>,
     mut removed_resources: RemovedComponents<BuildingMaterial>,
 ) {

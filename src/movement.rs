@@ -8,7 +8,6 @@ use bevy_rapier2d::prelude::{
 use crate::{
     climbable::ClimbableMap,
     dwarf::DWARF_COLLISION_GROUP,
-    gravity::Gravity,
     terrain::{TerrainParams, TERRAIN_COLLISION_GROUP},
 };
 
