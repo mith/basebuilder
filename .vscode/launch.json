@@ -13,7 +13,7 @@
                     "build",
                     "--bin=basebuilder",
                     "--package=basebuilder",
-                    // "--features=inspector"
+                    "--features=inspector"
                 ],
                 "filter": {
                     "name": "basebuilder",

@@ -23,7 +23,12 @@
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
-        pkgs = nixpkgs.legacyPackages."${system}";
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [
+            customOverlay
+          ];
+        };
         rust = fenix.packages.${system}.stable;
         craneLib = crane.lib."${system}".overrideToolchain rust.toolchain;
         buildInputs = with pkgs; [
@@ -42,6 +47,35 @@
           pkg-config
         ];
         rustsrc = craneLib.cleanCargoSource (craneLib.path ./.);
+        customOverlay = final: prev: {
+          ## from the Nickel flake: https://github.com/tweag/nickel/blob/dc6804acd123257460eef60d615da2eb0a8aca78/flake.nix#L58
+          # The version of `wasm-bindgen` CLI *must* be the same as the `wasm-bindgen` Rust dependency in `Cargo.toml`.
+          # The definition of `wasm-bindgen-cli` in Nixpkgs does not allow overriding directly the attrset passed to `buildRustPackage`.
+          # We instead override the attrset that `buildRustPackage` generates and passes to `mkDerivation`.
+          # See https://discourse.nixos.org/t/is-it-possible-to-override-cargosha256-in-buildrustpackage/4393
+          wasm-bindgen-cli = prev.wasm-bindgen-cli.overrideAttrs (oldAttrs: let
+            wasmBindgenVersion = "0.2.86";
+          in rec {
+            pname = "wasm-bindgen-cli";
+            version = wasmBindgenVersion;
+
+            src = final.fetchCrate {
+              inherit pname version;
+              sha256 = "sha256-56EOiLbdgAcoTrkyvB3t9TjtLaRvGxFUXx4haLwE2QY=";
+            };
+
+            cargoTestFlags = ["--test=wasm-bindgen"];
+            doInstallCheck = false;
+            doCheck = false;
+
+            cargoDeps = oldAttrs.cargoDeps.overrideAttrs (final.lib.const {
+              # This `inherit src` is important, otherwise, the old `src` would be used here
+              name = "wasm-bindgen-${version}-vendor.tar.gz";
+              inherit src;
+              outputHash = "sha256-+8wqmx7t91Gos64crUdc3abtB8vdTFJVy1perhEEuWU=";
+            });
+          });
+        };
       in {
         packages.basebuilder-bin = craneLib.buildPackage {
           name = "basebuilder-bin";
@@ -150,7 +184,7 @@
           inherit buildInputs;
           nativeBuildInputs =
             [
-              (rust.withComponents ["cargo" "rustc" "rust-src" "rustfmt" "clippy"])
+              (rust.withComponents ["cargo" "rustc" "rust-src" "rust-analysis" "rustfmt" "clippy"])
             ]
             ++ nativeBuildInputs;
         };

@@ -50,6 +50,9 @@ features = [
     "png",
 ]
 
+[target.'cfg(target_family = "wasm")'.dependencies]
+bevy_ecs_tilemap = { version = "0.10.0", features = ["atlas"] }
+
 [target.'cfg(unix)'.dependencies.bevy]
 version = "0.10"
 default-features = false
