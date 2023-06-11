@@ -4,35 +4,35 @@ use bevy_ecs_tilemap::tiles::TilePos;
 use crate::{
     designation_layer::Designated,
     hovered_tile::HoveredTile,
-    labor::job::{
-        all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Job, JobSite, Worker,
-    },
+    labor::job::{all_workers_eligible, AssignedJob, AtJobSite, Job, JobSite, Worker},
     terrain::{TerrainParams, TerrainSet, TileDamageEvent, TileDestroyedEvent},
 };
 
-use super::job::Complete;
+use super::job::{register_job, Complete};
 
 pub struct DigPlugin;
 
 impl Plugin for DigPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<DiggingCompleteEvent>()
+            .register_type::<DigJob>()
             .register_type::<Digging>()
             .register_type::<DiggingTimer>()
             .register_type::<DigToolState>()
             .add_state::<DigToolState>()
             .add_systems((
                 designate_dig.run_if(state_exists_and_equals(DigToolState::Designating)),
-                job_assigned::<DigJob, Digger>,
                 all_workers_eligible::<DigJob>,
                 start_digging,
                 dig_timer.before(TerrainSet),
                 finish_digging,
             ));
+
+        register_job::<DigJob, Digger>(app);
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct DigJob(Entity);
 
 #[derive(States, Default, Reflect, Clone, Eq, PartialEq, Hash, Debug)]
@@ -78,7 +78,7 @@ fn designate_dig(
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Debug)]
 struct Digger;
 
 #[derive(Component, Reflect)]
@@ -145,6 +145,8 @@ fn finish_digging(
 
                 // Retrieve the parent if it is a job
                 let parent_job = parent_job_query.get(digging_job).ok().map(|p| p.get());
+
+                info!(worker = ?worker_entity, digging = ?digging_job, "Digging complete");
 
                 digging_complete_event_writer.send(DiggingCompleteEvent {
                     job: digging_job,

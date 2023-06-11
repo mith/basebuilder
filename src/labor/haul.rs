@@ -1,25 +1,27 @@
 use bevy::prelude::*;
 
-use crate::labor::job::{
-    all_workers_eligible, assign_job, AssignedJob, AssignedTo, Complete, Job, JobSite,
-};
+use crate::labor::job::{all_workers_eligible, AssignedJob, AssignedTo, Complete, Job, JobSite};
 
 use super::{
     deliver::{Delivering, Delivery, DeliveryCompletedEvent},
-    pickup::{Pickup, PickupCompletedEvent},
+    job::{JobAssignedEvent, JobAssignmentSet, JobManagerParams},
+    pickup::{PickingUp, Pickup, PickupCompletedEvent},
 };
 
 pub struct HaulPlugin;
 
 impl Plugin for HaulPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<HaulCompletedEvent>().add_systems((
-            all_workers_eligible::<Haul>,
-            haul_job_assigned,
-            pickup_complete,
-            start_delivery,
-            delivery_complete,
-        ));
+        app.add_event::<HaulCompletedEvent>().add_systems(
+            (
+                all_workers_eligible::<Haul>,
+                start_haul_job,
+                pickup_complete,
+                start_delivery,
+                delivery_complete,
+            )
+                .before(JobAssignmentSet),
+        );
     }
 }
 
@@ -53,27 +55,31 @@ impl Haul {
 #[derive(Component, Default)]
 pub struct Hauler;
 
-fn haul_job_assigned(
+/// Start a pickup job when a haul job is assigned and the worker is not already carrying the load
+/// (i.e. the load is not a child of the worker)
+fn start_haul_job(
     mut commands: Commands,
-    assigned_job_query: Query<
-        (Entity, &Haul, &AssignedTo, &JobSite, Option<&Children>),
-        Added<AssignedTo>,
+    hauler_query: Query<
+        (Entity, &AssignedJob),
+        (With<Hauler>, Without<Carrying>, Without<PickingUp>),
     >,
+    haul_job_query: Query<(&Haul, &JobSite)>,
+    children_query: Query<&Children>,
 ) {
-    for (job_entity, haul, assigned_to, job_site, opt_children) in &mut assigned_job_query.iter() {
-        // check if the worker is already carrying the load by checking
-        // if the load is a child of the worker
-        if opt_children
-            .map(|children| children.iter().any(|e| *e == haul.load))
-            .unwrap_or(false)
-        {
-            commands.entity(assigned_to.0).insert(Carrying);
+    for (worker_entity, AssignedJob(job_entity)) in &hauler_query {
+        let Ok((haul, job_site)) = haul_job_query.get(*job_entity) else {
+            error!("Haul job {:?} not found", job_entity);
+            continue;
+        };
+        // check if the worker is already carrying the load
+        if is_carrying(&children_query, worker_entity, haul.load) {
+            info!(worker=?worker_entity, "Worker is already carrying the load");
+            commands.entity(worker_entity).insert(Carrying);
             continue;
         }
         let pickup_job = commands
             .spawn((
                 Job,
-                AssignedTo(assigned_to.0),
                 Pickup {
                     amount: haul.amount,
                     from: haul.load,
@@ -81,13 +87,18 @@ fn haul_job_assigned(
                 job_site.clone(),
             ))
             .id();
+        commands.entity(*job_entity).add_child(pickup_job);
 
-        commands.entity(job_entity).add_child(pickup_job);
-
-        commands
-            .entity(assigned_to.0)
-            .insert((Hauler, AssignedJob(pickup_job)));
+        info!(
+            "Spawned pickup job {:?} for haul job {:?} at {:?}",
+            pickup_job, job_entity, job_site
+        );
     }
+}
+
+/// Check if a hauler is carrying an item
+fn is_carrying(children_query: &Query<&Children>, hauler: Entity, item: Entity) -> bool {
+    children_query.iter_descendants(hauler).any(|e| e == item)
 }
 
 #[derive(Component, Default)]
@@ -109,6 +120,10 @@ fn pickup_complete(
             .map(|e| haul_job_query.contains(e))
             .unwrap_or(false)
         {
+            info!(
+                "Worker {:?} completed pickup and is now carrying the load",
+                worker
+            );
             commands.entity(*worker).insert(Carrying);
         }
     }
@@ -128,7 +143,7 @@ fn start_delivery(
             continue;
         };
         let haul_job_entity = assigned_job.0;
-        let pickup_job = commands
+        let delivery_job = commands
             .spawn((
                 Job,
                 Delivery {
@@ -139,9 +154,11 @@ fn start_delivery(
                 haul_job.delivery_site.clone(),
             ))
             .id();
-        commands.entity(haul_job_entity).add_child(pickup_job);
-
-        assign_job(&mut commands, hauler_entity, haul_job_entity);
+        commands.entity(haul_job_entity).add_child(delivery_job);
+        info!(
+            "Spawned delivery job {:?} for haul job {:?} at {:?}",
+            delivery_job, haul_job_entity, haul_job.delivery_site
+        );
     }
 }
 
@@ -175,6 +192,8 @@ fn delivery_complete(
                 .entity(*worker)
                 .remove::<Carrying>()
                 .remove::<Hauler>();
+
+            info!(worker=?worker, haul_job=?haul_job_entity, "Haul job completed");
 
             haul_complete_event_writer.send(HaulCompletedEvent {
                 job: haul_job_entity,

@@ -48,7 +48,7 @@ fn spawn_trees(
     let mut rng = Xoshiro256StarStar::seed_from_u64(terrain_settings.seed as u64);
     let terrain_half_width = terrain_settings.width as f32 / 2.0 / 3.;
     let possible_x_pos: Vec<f32> = (-terrain_half_width as i32..=terrain_half_width as i32)
-        .filter(|x| (*x).abs() > 5)
+        .filter(|x| (*x).abs() > 2)
         .map(|x| x as f32 * 3. * terrain_settings.cell_size)
         .choose_multiple(&mut rng, 25);
     for x in possible_x_pos {

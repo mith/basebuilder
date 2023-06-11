@@ -1,7 +1,11 @@
 use bevy::{
     math::Vec3Swizzles,
-    prelude::{error, App, Commands, Component, Entity, GlobalTransform, Plugin, Query, Without},
+    prelude::{
+        apply_system_buffers, error, App, Commands, Component, Entity, GlobalTransform,
+        IntoSystemConfig, IntoSystemConfigs, Plugin, Query, Without,
+    },
 };
+use tracing::info;
 
 use crate::{
     ai_controller::Path,
@@ -9,13 +13,20 @@ use crate::{
     pathfinding::Pathfinding,
 };
 
-use super::stuck::StuckTimer;
+use super::{
+    job::{Complete, JobAssignmentSet},
+    stuck::StuckTimer,
+};
 
 pub struct CommutePlugin;
 
 impl Plugin for CommutePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(commute);
+        app.add_systems(
+            (apply_system_buffers, commute, apply_system_buffers)
+                .chain()
+                .after(JobAssignmentSet),
+        );
     }
 }
 
@@ -28,7 +39,7 @@ fn commute(
         (Entity, &AssignedJob, &GlobalTransform, Option<&Path>),
         Without<AtJobSite>,
     >,
-    job_query: Query<&JobSite>,
+    job_query: Query<&JobSite, Without<Complete>>,
     pathfinder: Pathfinding,
 ) {
     for (worker_entity, assigned_job, worker_transform, opt_path) in &workers_query {
@@ -55,6 +66,7 @@ fn commute(
                 .entity(worker_entity)
                 .insert(AtJobSite)
                 .remove::<Commuting>();
+            info!("Worker arrived at job site");
             continue;
         }
 
@@ -70,8 +82,10 @@ fn commute(
                 .remove::<StuckTimer>()
                 .insert(Commuting)
                 .insert(Path(path));
+            info!("Worker started commuting");
         } else {
             // no path found, start stucktimer
+            info!("Worker stuck, starting stuck timer");
             commands.entity(worker_entity).insert(StuckTimer::default());
         }
     }

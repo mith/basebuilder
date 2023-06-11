@@ -7,15 +7,16 @@ use bevy_rapier2d::prelude::Group;
 use crate::{
     cursor_position::CursorPosition,
     hovered_tile::{HoveredTile, HoveredTileSet},
-    labor::job::{
-        all_workers_eligible, job_assigned, AssignedJob, AtJobSite, Job, JobSite, Worker,
-    },
+    labor::job::{all_workers_eligible, AssignedJob, AtJobSite, Job, JobSite, Worker},
     ladder::spawn_ladder,
     resource::{BuildingMaterial, BuildingMaterialLocator, Reserved},
     terrain::Terrain,
 };
 
-use super::haul::{Haul, HaulCompletedEvent};
+use super::{
+    haul::{Haul, HaulCompletedEvent},
+    job::{register_job, Complete},
+};
 
 pub struct BuildPlugin;
 
@@ -23,6 +24,7 @@ impl Plugin for BuildPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<BuildToolState>()
             .add_event::<ConstructionCompletedEvent>()
+            .register_type::<ConstructionJob>()
             .add_system(
                 designate_construction
                     .run_if(state_exists_and_equals(BuildToolState::Placing))
@@ -31,12 +33,13 @@ impl Plugin for BuildPlugin {
             .add_systems((
                 designate_building_materials,
                 materials_delivered,
-                job_assigned::<ConstructionJob, Builder>,
                 all_workers_eligible::<ConstructionJob>,
                 start_building,
                 build_timer,
                 finish_building,
             ));
+
+        register_job::<ConstructionJob, Builder>(app);
     }
 }
 
@@ -184,10 +187,11 @@ fn designate_building_materials(
             let x = resource_transform.translation().x;
             let y = resource_transform.translation().y;
             let pickup_site = JobSite(vec![Vec2::new(x, y)]);
-            let delivery_site = JobSite(vec![Vec2::new(
-                construction_transform.translation().x,
-                construction_transform.translation().y,
-            )]);
+            let delivery_sites = (-1..=1)
+                .flat_map(|x| (-1..=1).map(move |y| Vec2::new(x as f32, y as f32)))
+                .map(|offset| Vec2::new(x, y) + offset)
+                .collect::<Vec<_>>();
+            let delivery_site = JobSite(delivery_sites);
 
             let haul_job = commands
                 .spawn((
@@ -213,10 +217,10 @@ fn designate_building_materials(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug, Clone, Reflect)]
 struct ConstructionJob(Entity);
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Debug)]
 struct Builder;
 
 fn materials_delivered(
@@ -329,6 +333,7 @@ fn finish_building(
     mut commands: Commands,
     construction_site_query: Query<(Entity, &UnderConstruction), Changed<UnderConstruction>>,
     mut construction_completed_event_writer: EventWriter<ConstructionCompletedEvent>,
+    construction_job_query: Query<&ConstructionJob>,
 ) {
     for (construction_site_entity, construction_site) in &mut construction_site_query.iter() {
         if construction_site.finished() {
@@ -336,6 +341,13 @@ fn finish_building(
                 .entity(construction_site_entity)
                 .remove::<UnderConstruction>()
                 .insert(Structure);
+
+            if let Some(construction_job) = construction_job_query
+                .iter()
+                .find(|cj| cj.0 == construction_site_entity)
+            {
+                commands.entity(construction_job.0).insert(Complete);
+            }
 
             construction_completed_event_writer.send(ConstructionCompletedEvent {
                 construction_site: construction_site_entity,

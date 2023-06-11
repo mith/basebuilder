@@ -1,14 +1,16 @@
 use bevy::{
+    ecs::system::SystemParam,
     math::Vec3Swizzles,
     prelude::{
-        apply_system_buffers, Added, App, Commands, Component, DespawnRecursiveExt, Entity,
-        GlobalTransform, IntoSystemConfigs, Parent, Plugin, Query, RemovedComponents, Res,
-        SystemSet, Vec2, With, Without,
+        apply_system_buffers, info, Added, App, Commands, Component, DespawnRecursiveExt, Entity,
+        EventReader, EventWriter, GlobalTransform, IntoSystemConfigs, Parent, Plugin, Query,
+        RemovedComponents, Res, SystemSet, Vec2, With, Without,
     },
     reflect::Reflect,
     time::{Time, Timer},
     utils::{HashMap, HashSet},
 };
+use tracing::{debug, instrument, warn};
 
 use crate::{ai_controller::Path, pathfinding::Pathfinding};
 
@@ -24,24 +26,10 @@ impl Plugin for JobPlugin {
             .register_type::<BlacklistedWorkers>()
             .register_type::<PathableWorkers>()
             .register_type::<EligibleWorkers>()
+            .register_type::<JobSite>()
             .add_systems((find_pathable_workers, blacklist_timer))
             .add_systems(
-                (
-                    apply_system_buffers,
-                    assign_jobs,
-                    apply_system_buffers,
-                    job_completed,
-                    apply_system_buffers,
-                )
-                    .chain()
-                    .in_set(JobAssignmentSet),
-            )
-            .add_systems(
-                (
-                    apply_system_buffers,
-                    worker_assignment_removed,
-                    apply_system_buffers,
-                )
+                (apply_system_buffers, assign_jobs, apply_system_buffers)
                     .chain()
                     .in_set(JobAssignmentSet),
             );
@@ -57,16 +45,18 @@ pub struct Job;
 #[derive(Component)]
 pub struct Worker;
 
+/// A job assigned to a worker
 #[derive(Component, Reflect)]
 pub struct AssignedJob(pub Entity);
 
+/// A worker assigned to a job
 #[derive(Component, Reflect)]
 pub struct AssignedTo(pub Entity);
 
 #[derive(Component, Reflect)]
 pub struct BlacklistedWorkers(pub HashMap<Entity, Timer>);
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Reflect, Debug)]
 pub struct JobSite(pub Vec<Vec2>);
 
 #[derive(Component)]
@@ -114,18 +104,51 @@ pub fn find_pathable_workers(
 #[derive(Component, Reflect)]
 pub struct EligibleWorkers(pub HashSet<Entity>);
 
+#[derive(SystemParam)]
+pub struct JobManagerParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    job_assigned_event_writer: EventWriter<'w, JobAssignedEvent>,
+}
+
+impl JobManagerParams<'_, '_> {
+    pub fn assign_job(&mut self, job_entity: Entity, worker_entity: Entity) {
+        self.commands
+            .entity(worker_entity)
+            .insert(AssignedJob(job_entity));
+        self.commands
+            .entity(job_entity)
+            .insert(AssignedTo(worker_entity));
+        self.job_assigned_event_writer.send(JobAssignedEvent {
+            job: job_entity,
+            worker: worker_entity,
+        });
+        info!(
+            "Assigned job {:?} to worker {:?}",
+            job_entity, worker_entity
+        );
+    }
+}
+
+#[instrument(skip(
+    unassigned_job_query,
+    assigned_job_query,
+    worker_query,
+    job_manager_params
+))]
 pub fn assign_jobs(
-    mut commands: Commands,
     unassigned_job_query: Query<
         (
             Entity,
             Option<&BlacklistedWorkers>,
             &PathableWorkers,
             &EligibleWorkers,
+            Option<&Parent>,
         ),
         (With<Job>, Without<AssignedTo>),
     >,
+    assigned_job_query: Query<&AssignedTo, With<Job>>,
     worker_query: Query<(Entity, &GlobalTransform), (With<Worker>, Without<AssignedJob>)>,
+    mut job_manager_params: JobManagerParams,
 ) {
     let mut unassigned_workers: HashMap<Entity, &GlobalTransform> = HashMap::from_iter(
         worker_query
@@ -133,9 +156,16 @@ pub fn assign_jobs(
             .map(|(entity, transform)| (entity, transform)),
     );
     // Look for unnassigned jobs and assign them to the closest unnoccupied worker
-    for (job_entity, opt_blacklisted_workers, pathable_workers, eligible_workers) in
+    for (job_entity, opt_blacklisted_workers, pathable_workers, eligible_workers, opt_parent) in
         &unassigned_job_query
     {
+        if let Some(AssignedTo(worker_entity)) =
+            opt_parent.and_then(|parent| assigned_job_query.get(parent.get()).ok())
+        {
+            // if the job is a subjob, and the parent job is assigned to a worker, assign the subjob to the same worker
+            job_manager_params.assign_job(job_entity, *worker_entity);
+            continue;
+        }
         // take the intersection of available workers and eligible workers and remove blacklisted workers
         let available_workers: HashMap<Entity, &Path> = HashMap::from_iter(
             pathable_workers
@@ -147,7 +177,9 @@ pub fn assign_jobs(
                             return None;
                         }
                     }
-                    if eligible_workers.0.contains(worker_entity) {
+                    if eligible_workers.0.contains(worker_entity)
+                        && unassigned_workers.contains_key(worker_entity)
+                    {
                         Some((*worker_entity, path))
                     } else {
                         None
@@ -155,7 +187,7 @@ pub fn assign_jobs(
                 }),
         );
 
-        // find closest available worker
+        // find closest available worker through sorting by path length
         let closest_available_worker = available_workers
             .iter()
             .min_by_key(|(_, path)| path.0.len())
@@ -163,27 +195,100 @@ pub fn assign_jobs(
 
         if let Some((worker_entity, path)) = closest_available_worker {
             // assign job to worker
-            commands
-                .entity(worker_entity)
-                .insert((AssignedJob(job_entity), path.clone()));
-            commands
-                .entity(job_entity)
-                .insert(AssignedTo(worker_entity));
+            job_manager_params.assign_job(job_entity, worker_entity);
             // remove worker from available workers
-            unassigned_workers.remove(&worker_entity);
+            if unassigned_workers.remove(&worker_entity).is_none() {
+                warn!("Worker {:?} was not in unassigned workers", worker_entity);
+            }
+        } else {
+            debug!("No available workers for job {:?}", job_entity);
         }
     }
 }
 
-pub fn job_assigned<J, W>(
+pub struct JobCompletedEvent<T> {
+    job_entity: Entity,
+    parent_job_entity: Option<Entity>,
+    worker_entity: Entity,
+    job: T,
+}
+
+pub fn register_job<J, W>(app: &mut App)
+where
+    J: bevy::prelude::Component + std::clone::Clone,
+    W: bevy::prelude::Component + Default + core::fmt::Debug,
+{
+    app.add_event::<JobCompletedEvent<J>>()
+        .add_systems((job_assigned::<J, W>, job_completed::<J>));
+}
+
+#[instrument(skip(commands, assigned_job_events, job_query))]
+fn job_assigned<J, W>(
     mut commands: Commands,
-    assigned_job_query: Query<&AssignedTo, (With<J>, Added<AssignedTo>)>,
+    mut assigned_job_events: EventReader<JobAssignedEvent>,
+    job_query: Query<Entity, With<J>>,
 ) where
     J: Component,
-    W: Component + Default,
+    W: Component + Default + core::fmt::Debug,
 {
-    for assigned_to in &assigned_job_query {
-        commands.entity(assigned_to.0).insert(W::default());
+    for assignment in assigned_job_events.iter() {
+        if job_query.get(assignment.job).is_err() {
+            // Assigned job is not of type J
+            continue;
+        }
+        info!("Worker {:?} is now a {:?}", assignment.worker, W::default());
+        commands.entity(assignment.worker).insert(W::default());
+    }
+}
+
+#[derive(Component)]
+pub struct Complete;
+
+#[instrument(skip(commands, completed_job_query, job_query, job_completed_events))]
+fn job_completed<J>(
+    mut commands: Commands,
+    mut completed_job_query: Query<
+        (Entity, &J, &AssignedTo, Option<&Parent>),
+        (With<Job>, Added<Complete>),
+    >,
+    job_query: Query<&Job>,
+    mut job_completed_events: EventWriter<JobCompletedEvent<J>>,
+) where
+    J: std::marker::Send + std::marker::Sync + 'static + bevy::prelude::Component + Clone,
+{
+    // If the completed job has a parent, assign the worker to the parent
+    // If the job has no parent, unassign the worker
+    for (job_entity, job, assigned_to, opt_parent) in &mut completed_job_query {
+        info!("Job {:?} completed", job_entity);
+        job_completed_events.send(JobCompletedEvent {
+            job_entity,
+            parent_job_entity: opt_parent.map(|p| p.get()),
+            worker_entity: assigned_to.0,
+            job: job.clone(),
+        });
+        if let Some(parent) = opt_parent.filter(|p| job_query.contains(p.get())) {
+            commands
+                .entity(parent.get())
+                .insert(AssignedTo(assigned_to.0));
+
+            remove_commute(&mut commands, assigned_to.0);
+
+            info!(
+                "Assigned worker {:?} to parent {:?}",
+                assigned_to.0,
+                parent.get()
+            );
+
+            commands
+                .entity(assigned_to.0)
+                .insert(AssignedJob(parent.get()));
+        } else {
+            commands.entity(assigned_to.0).remove::<AssignedJob>();
+            remove_commute(&mut commands, assigned_to.0);
+        }
+
+        commands.entity(job_entity).despawn_recursive();
+        info!("Despawned job {:?}", job_entity);
     }
 }
 
@@ -200,63 +305,14 @@ pub fn all_workers_eligible<J>(
             .insert(EligibleWorkers(HashSet::from_iter(worker_query.iter())));
     }
 }
-fn worker_assignment_removed(
-    mut commands: Commands,
-    mut removed_assigned_job: RemovedComponents<AssignedJob>,
-) {
-    for unassigned_worker_entity in removed_assigned_job.iter() {
-        remove_commute(&mut commands, unassigned_worker_entity);
-    }
-}
 
 pub fn remove_commute(commands: &mut Commands, worker_entity: Entity) {
+    info!("Removing commute for worker {:?}", worker_entity);
     commands
         .entity(worker_entity)
         .remove::<Commuting>()
         .remove::<AtJobSite>()
         .remove::<Path>();
-}
-
-pub fn assign_job(commands: &mut Commands, worker_entity: Entity, job_entity: Entity) {
-    commands
-        .entity(worker_entity)
-        .insert(AssignedJob(job_entity));
-    commands
-        .entity(job_entity)
-        .insert(AssignedTo(worker_entity));
-}
-
-#[derive(Component)]
-pub struct Complete;
-
-fn job_completed(
-    mut commands: Commands,
-    mut completed_job_query: Query<
-        (Entity, &AssignedTo, Option<&Parent>),
-        (With<Job>, Added<Complete>),
-    >,
-    job_query: Query<&Job>,
-) {
-    // If the completed job has a parent, assign the worker to the parent
-    // If the job has no parent, unassign the worker
-    for (job_entity, assigned_to, opt_parent) in &mut completed_job_query {
-        if let Some(parent) = opt_parent.filter(|p| job_query.contains(p.get())) {
-            commands
-                .entity(parent.get())
-                .insert(AssignedTo(assigned_to.0));
-
-            remove_commute(&mut commands, assigned_to.0);
-
-            commands
-                .entity(assigned_to.0)
-                .insert(AssignedJob(parent.get()));
-        } else {
-            commands.entity(assigned_to.0).remove::<AssignedJob>();
-            remove_commute(&mut commands, assigned_to.0);
-        }
-
-        commands.entity(job_entity).despawn_recursive();
-    }
 }
 
 fn blacklist_timer(time: Res<Time>, mut blacklisted_worker_query: Query<&mut BlacklistedWorkers>) {
@@ -271,5 +327,13 @@ fn blacklist_timer(time: Res<Time>, mut blacklisted_worker_query: Query<&mut Bla
         for worker_entity in to_remove {
             blacklisted_workers.0.remove(&worker_entity);
         }
+    }
+}
+
+pub trait WorkerTrait {
+    type Worker: Component + Default;
+
+    fn worker() -> Self::Worker {
+        Self::Worker::default()
     }
 }
