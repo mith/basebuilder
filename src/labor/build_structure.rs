@@ -18,9 +18,9 @@ use super::{
     job::{register_job, Complete},
 };
 
-pub struct BuildPlugin;
+pub struct BuildStructurePlugin;
 
-impl Plugin for BuildPlugin {
+impl Plugin for BuildStructurePlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<BuildToolState>()
             .add_event::<ConstructionCompletedEvent>()
@@ -184,13 +184,19 @@ fn designate_building_materials(
             let resource_transform = building_material_query
                 .get(resource_entity)
                 .expect("Resource entity should have a transform");
-            let x = resource_transform.translation().x;
-            let y = resource_transform.translation().y;
-            let pickup_site = JobSite(vec![Vec2::new(x, y)]);
-            let delivery_sites = (-1..=1)
-                .flat_map(|x| (-1..=1).map(move |y| Vec2::new(x as f32, y as f32)))
-                .map(|offset| Vec2::new(x, y) + offset)
-                .collect::<Vec<_>>();
+            let pickup_site = {
+                let x = resource_transform.translation().x;
+                let y = resource_transform.translation().y;
+                JobSite(vec![Vec2::new(x, y)])
+            };
+            let delivery_sites = {
+                let x = construction_transform.translation().x;
+                let y = construction_transform.translation().y;
+                (-1..=1)
+                    .flat_map(|x| (-1..=1).map(move |y| Vec2::new(x as f32, y as f32)))
+                    .map(|offset| Vec2::new(x, y) + offset)
+                    .collect::<Vec<_>>()
+            };
             let delivery_site = JobSite(delivery_sites);
 
             let haul_job = commands

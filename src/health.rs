@@ -6,11 +6,7 @@ impl Plugin for HealthPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Health>()
             .add_event::<HealthDamageEvent>()
-            .add_systems(
-                (update_health, despawn_dead_entities)
-                    .chain()
-                    .in_set(HealthSet),
-            );
+            .add_system(update_health.in_set(HealthSet));
     }
 }
 
@@ -31,14 +27,6 @@ fn update_health(
     for damage_event in health_damage_events.iter() {
         if let Ok(mut health) = health_query.get_mut(damage_event.entity) {
             health.0 = health.0.saturating_sub(damage_event.damage);
-        }
-    }
-}
-
-fn despawn_dead_entities(mut commands: Commands, mut health_query: Query<(Entity, &Health)>) {
-    for (entity, health) in &mut health_query {
-        if health.0 == 0 {
-            commands.entity(entity).despawn_recursive();
         }
     }
 }

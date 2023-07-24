@@ -19,14 +19,13 @@ pub struct TreePlugin;
 impl Plugin for TreePlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<TreesState>()
-            .add_event::<TreeDamageEvent>()
             .add_event::<TreeDestroyedEvent>()
             .add_system(
                 spawn_trees
                     .in_schedule(OnEnter(MainState::Game))
                     .after(TerrainSet),
             )
-            .add_systems((update_tree_health, destroy_trees));
+            .add_system(destroy_trees);
     }
 }
 
@@ -82,44 +81,31 @@ fn spawn_tree(
     meshes: &mut ResMut<Assets<Mesh>>,
 ) {
     let tree_size = Vec2::new(16., 180.);
-    commands.spawn((
-        Tree,
-        Name::new("Tree"),
-        MaterialMesh2dBundle {
-            transform: Transform::from_xyz(x, y + tree_size.y / 2., 2.),
-            material: materials.add(Color::rgb(0.29, 0.196, 0.101).into()),
-            mesh: meshes.add(Mesh::from(shape::Quad::new(tree_size))).into(),
-            ..default()
-        },
-        RigidBody::Fixed,
-        Collider::cuboid(tree_size.x / 2., tree_size.y / 2.),
-        CollisionGroups::new(
-            TREE_COLLISION_GROUP,
-            TERRAIN_COLLISION_GROUP | PICKER_COLLISION_GROUP,
-        ),
-    ));
-}
-
-pub struct TreeDamageEvent {
-    pub tree: Entity,
-    pub damage: u32,
-}
-
-fn update_tree_health(
-    mut commands: Commands,
-    mut tree_damage_events: EventReader<TreeDamageEvent>,
-    mut tree_health_query: Query<&mut Health, With<Tree>>,
-) {
-    for tree_damage_event in tree_damage_events.iter() {
-        if let Ok(mut tree_health) = tree_health_query.get_mut(tree_damage_event.tree) {
-            tree_health.0 = tree_health.0.saturating_sub(tree_damage_event.damage);
-        } else {
-            if let Some(mut tree_entity_commands) = commands.get_entity(tree_damage_event.tree) {
-                tree_entity_commands
-                    .insert(Health(100u32.saturating_sub(tree_damage_event.damage)));
-            }
-        }
-    }
+    commands
+        .spawn((
+            Tree,
+            Name::new("Tree"),
+            TransformBundle::from_transform(Transform::from_xyz(x, y, 2.)),
+            Visibility::default(),
+            ComputedVisibility::default(),
+            RigidBody::Fixed,
+            CollisionGroups::new(
+                TREE_COLLISION_GROUP,
+                TERRAIN_COLLISION_GROUP | PICKER_COLLISION_GROUP,
+            ),
+            Health(100),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                MaterialMesh2dBundle {
+                    transform: Transform::from_xyz(0., tree_size.y / 2., 0.),
+                    material: materials.add(Color::rgb(0.29, 0.196, 0.101).into()),
+                    mesh: meshes.add(Mesh::from(shape::Quad::new(tree_size))).into(),
+                    ..default()
+                },
+                Collider::cuboid(tree_size.x / 2., tree_size.y / 2.),
+            ));
+        });
 }
 
 pub struct TreeDestroyedEvent {
@@ -141,6 +127,7 @@ fn destroy_trees(
 ) {
     for (tree_health, tree_transform, tree_entity) in &tree_health_query {
         if tree_health.0 == 0 {
+            info!(tree = ?tree_entity, "Tree destroyed");
             commands.entity(tree_entity).despawn_recursive();
             tree_destroyed_events.send(TreeDestroyedEvent { tree: tree_entity });
 
@@ -155,24 +142,27 @@ fn destroy_trees(
                 rapier_context.cast_ray_and_get_normal(ray_origin, ray_dir, max_toi, solid, filter)
             {
                 let log_size = Vec2::new(15., 10.);
-                commands.spawn((
-                    Log,
-                    Name::new("Log"),
-                    BuildingMaterial,
-                    MaterialMesh2dBundle {
-                        transform: Transform::from_xyz(
-                            intersection.1.point.x,
-                            intersection.1.point.y + log_size.y / 2.,
-                            2.,
-                        ),
-                        material: materials.add(Color::rgb(0.29, 0.196, 0.101).into()),
-                        mesh: meshes.add(Mesh::from(shape::Quad::new(log_size))).into(),
-                        ..default()
-                    },
-                    RigidBody::Fixed,
-                    Collider::cuboid(log_size.x / 2., log_size.y / 2.),
-                    CollisionGroups::new(OBJECT_COLLISION_GROUP, TERRAIN_COLLISION_GROUP),
-                ));
+                let log_entity = commands
+                    .spawn((
+                        Log,
+                        Name::new("Log"),
+                        BuildingMaterial,
+                        MaterialMesh2dBundle {
+                            transform: Transform::from_xyz(
+                                intersection.1.point.x,
+                                intersection.1.point.y + log_size.y / 2.,
+                                2.,
+                            ),
+                            material: materials.add(Color::rgb(0.29, 0.196, 0.101).into()),
+                            mesh: meshes.add(Mesh::from(shape::Quad::new(log_size))).into(),
+                            ..default()
+                        },
+                        RigidBody::Fixed,
+                        Collider::cuboid(log_size.x / 2., log_size.y / 2.),
+                        CollisionGroups::new(OBJECT_COLLISION_GROUP, TERRAIN_COLLISION_GROUP),
+                    ))
+                    .id();
+                info!(log = ?log_entity, "Log spawned");
             }
         }
     }

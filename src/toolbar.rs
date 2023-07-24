@@ -1,9 +1,9 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContexts;
 
-use crate::labor::build::BuildToolState;
+use crate::labor::build_structure::BuildToolState;
 use crate::labor::chop_tree::FellingToolState;
-use crate::labor::dig::DigToolState;
+use crate::labor::dig_tile::DigToolState;
 
 pub struct ToolbarPlugin;
 

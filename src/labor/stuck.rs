@@ -7,7 +7,7 @@ use bevy_rapier2d::prelude::KinematicCharacterControllerOutput;
 
 use crate::{
     ai_controller::Path,
-    labor::job::{AssignedJob, AssignedTo, BlacklistedWorkers, Job, Worker},
+    labor::job::{AssignedJob, AssignedWorker, BlacklistedWorkers, Job, Worker},
 };
 
 pub struct StuckPlugin;
@@ -68,7 +68,7 @@ fn stuck_timer(
             commands.entity(worker_entity).remove::<StuckTimer>();
             commands.entity(worker_entity).remove::<AssignedJob>();
 
-            commands.entity(assigned_job.0).remove::<AssignedTo>();
+            commands.entity(assigned_job.0).remove::<AssignedWorker>();
             if let Ok(mut blacklisted_workers) = blacklisted_workers_query.get_mut(assigned_job.0) {
                 blacklisted_workers
                     .0

@@ -1,12 +1,15 @@
 use bevy::prelude::*;
 
-use crate::labor::job::{all_workers_eligible, AssignedJob, AssignedTo, Complete, Job, JobSite};
-
-use super::{
-    deliver::{Delivering, Delivery, DeliveryCompletedEvent},
-    job::{JobAssignedEvent, JobAssignmentSet, JobManagerParams},
-    pickup::{PickingUp, Pickup, PickupCompletedEvent},
+use crate::{
+    actions::{
+        action::{Action, ActionCompletedEvent},
+        deliver::Deliver,
+        pickup::Pickup,
+    },
+    labor::job::{all_workers_eligible, Complete, JobSite},
 };
+
+use super::job::{AssignedWorker, JobAssignmentSet};
 
 pub struct HaulPlugin;
 
@@ -55,109 +58,136 @@ impl Haul {
 #[derive(Component, Default)]
 pub struct Hauler;
 
+#[derive(Component)]
+struct AwaitingPickup(Entity);
+
 /// Start a pickup job when a haul job is assigned and the worker is not already carrying the load
 /// (i.e. the load is not a child of the worker)
 fn start_haul_job(
     mut commands: Commands,
-    hauler_query: Query<
-        (Entity, &AssignedJob),
-        (With<Hauler>, Without<Carrying>, Without<PickingUp>),
+    haul_job_query: Query<
+        (Entity, &Haul, &AssignedWorker),
+        (
+            Without<AwaitingPickup>,
+            Without<AwaitingDelivery>,
+            Without<Complete>,
+        ),
     >,
-    haul_job_query: Query<(&Haul, &JobSite)>,
     children_query: Query<&Children>,
 ) {
-    for (worker_entity, AssignedJob(job_entity)) in &hauler_query {
-        let Ok((haul, job_site)) = haul_job_query.get(*job_entity) else {
-            error!("Haul job {:?} not found", job_entity);
-            continue;
-        };
+    for (haul_job_entity, haul_job, AssignedWorker(hauler_entity)) in &mut haul_job_query.iter() {
         // check if the worker is already carrying the load
-        if is_carrying(&children_query, worker_entity, haul.load) {
-            info!(worker=?worker_entity, "Worker is already carrying the load");
-            commands.entity(worker_entity).insert(Carrying);
+        if is_hauler_carrying_load(&children_query, *hauler_entity, haul_job.load) {
+            debug!(worker=?hauler_entity, load = ?haul_job.load, "Worker is already carrying the load.");
+            commands.entity(haul_job_entity).insert(WorkerCarrying);
             continue;
         }
-        let pickup_job = commands
+        let pickup_action = commands
             .spawn((
-                Job,
+                Action,
                 Pickup {
-                    amount: haul.amount,
-                    from: haul.load,
+                    amount: haul_job.amount,
+                    from: haul_job.load,
                 },
-                job_site.clone(),
+                haul_job.pickup_site.clone(),
             ))
             .id();
-        commands.entity(*job_entity).add_child(pickup_job);
+        commands.entity(*hauler_entity).add_child(pickup_action);
+
+        commands
+            .entity(haul_job_entity)
+            .insert(AwaitingPickup(pickup_action));
 
         info!(
-            "Spawned pickup job {:?} for haul job {:?} at {:?}",
-            pickup_job, job_entity, job_site
+            action=?pickup_action, job=?haul_job_entity, pickup=?haul_job.pickup_site,
+            "Spawned pickup action for haul job."
         );
     }
 }
 
 /// Check if a hauler is carrying an item
-fn is_carrying(children_query: &Query<&Children>, hauler: Entity, item: Entity) -> bool {
-    children_query.iter_descendants(hauler).any(|e| e == item)
+fn is_hauler_carrying_load(
+    children_query: &Query<&Children>,
+    hauler: Entity,
+    load: Entity,
+) -> bool {
+    children_query.iter_descendants(hauler).any(|e| e == load)
 }
 
 #[derive(Component, Default)]
-pub struct Carrying;
+pub struct WorkerCarrying;
 
 fn pickup_complete(
     mut commands: Commands,
-    mut pickup_complete_event_reader: EventReader<PickupCompletedEvent>,
-    haul_job_query: Query<&Haul>,
+    mut pickup_complete_event_reader: EventReader<ActionCompletedEvent<Pickup>>,
+    haul_job_query: Query<(Entity, &Haul, &AwaitingPickup)>,
 ) {
-    for PickupCompletedEvent {
-        job: _,
-        parent_job,
-        worker,
-        item: _,
+    for ActionCompletedEvent {
+        action_entity: completed_action_entity,
+        performer_entity,
+        action: Pickup {
+            amount,
+            from: pickup_up_entity,
+        },
     } in pickup_complete_event_reader.iter()
     {
-        if parent_job
-            .map(|e| haul_job_query.contains(e))
-            .unwrap_or(false)
-        {
+        if let Some((haul_job_entity, haul_job)) = haul_job_query.iter().find_map(
+            |(haul_job_entity, haul, AwaitingPickup(queued_action_entity))| {
+                if completed_action_entity == queued_action_entity {
+                    Some((haul_job_entity, haul))
+                } else {
+                    None
+                }
+            },
+        ) {
+            if haul_job.load != *pickup_up_entity {
+                panic!("Haul job load does not match pickup action load.")
+            }
+            if haul_job.amount != *amount {
+                panic!("Haul job amount does not match pickup action amount.")
+            }
+            commands
+                .entity(haul_job_entity)
+                .insert(WorkerCarrying)
+                .remove::<AwaitingPickup>();
             info!(
-                "Worker {:?} completed pickup and is now carrying the load",
-                worker
+                "Hauler {:?} picked up {:?} for haul job {:?}",
+                performer_entity, pickup_up_entity, haul_job_entity
             );
-            commands.entity(*worker).insert(Carrying);
         }
     }
 }
 
+#[derive(Component)]
+struct AwaitingDelivery(Entity);
+
 fn start_delivery(
     mut commands: Commands,
-    haul_job_query: Query<&Haul>,
-    hauler_query: Query<
-        (Entity, &AssignedJob),
-        (With<Hauler>, With<Carrying>, Without<Delivering>),
+    haul_job_query: Query<
+        (Entity, &Haul, &AssignedWorker),
+        (With<WorkerCarrying>, Without<AwaitingDelivery>),
     >,
 ) {
-    for (hauler_entity, assigned_job) in &hauler_query {
-        let Ok(haul_job) = haul_job_query.get(assigned_job.0) else {
-            error!("Hauler {:?} has no haul job", hauler_entity);
-            continue;
-        };
-        let haul_job_entity = assigned_job.0;
-        let delivery_job = commands
+    for (haul_job_entity, haul_job, AssignedWorker(hauler_entity)) in &haul_job_query {
+        let delivery_action = commands
             .spawn((
-                Job,
-                Delivery {
-                    amount: 0,
+                Action,
+                Deliver {
                     load: haul_job.load,
                     to: haul_job.to,
                 },
                 haul_job.delivery_site.clone(),
             ))
             .id();
-        commands.entity(haul_job_entity).add_child(delivery_job);
+        commands.entity(*hauler_entity).add_child(delivery_action);
+
+        commands
+            .entity(haul_job_entity)
+            .insert(AwaitingDelivery(delivery_action));
+
         info!(
-            "Spawned delivery job {:?} for haul job {:?} at {:?}",
-            delivery_job, haul_job_entity, haul_job.delivery_site
+            action=?delivery_action, job=?haul_job_entity, delivery=?haul_job.delivery_site,
+            "Spawned delivery action for haul job."
         );
     }
 }
@@ -171,27 +201,38 @@ pub struct HaulCompletedEvent {
 
 fn delivery_complete(
     mut commands: Commands,
-    mut delivery_complete_event_reader: EventReader<DeliveryCompletedEvent>,
-    mut haul_job_query: Query<Option<&Parent>, With<Haul>>,
+    mut delivery_complete_event_reader: EventReader<ActionCompletedEvent<Deliver>>,
+    haul_job_query: Query<(Entity, &AwaitingPickup, &Haul, Option<&Parent>)>,
     mut haul_complete_event_writer: EventWriter<HaulCompletedEvent>,
 ) {
-    for DeliveryCompletedEvent {
-        job: _,
-        parent_job: delivery_parent,
-        worker,
-        item,
+    for ActionCompletedEvent::<Deliver> {
+        action_entity: completed_action_entity,
+        performer_entity: worker,
+        action: Deliver { load: item, to },
     } in delivery_complete_event_reader.iter()
     {
-        if let Some((haul_job_entity, haul_job_parent)) =
-            delivery_parent.and_then(|e| haul_job_query.get_mut(e).ok().map(|p| (e, p)))
-        {
+        if let Some((haul_job_entity, haul_job, haul_job_parent)) = haul_job_query.iter().find_map(
+            |(haul_job_entity, AwaitingPickup(queued_action_entity), haul_job, haul_job_parent)| {
+                if completed_action_entity == queued_action_entity {
+                    Some((haul_job_entity, haul_job, haul_job_parent))
+                } else {
+                    None
+                }
+            },
+        ) {
+            if haul_job.to != *to {
+                error!(
+                    "Haul job {:?} to {:?} does not match delivery action to {:?}.",
+                    haul_job_entity, haul_job.to, to
+                );
+                continue;
+            }
             // Mark job as complete
-            commands.entity(haul_job_entity).insert(Complete);
-            // Remove hauler and carrying from worker
             commands
-                .entity(*worker)
-                .remove::<Carrying>()
-                .remove::<Hauler>();
+                .entity(haul_job_entity)
+                .remove::<AwaitingDelivery>()
+                .remove::<WorkerCarrying>()
+                .insert(Complete);
 
             info!(worker=?worker, haul_job=?haul_job_entity, "Haul job completed");
 

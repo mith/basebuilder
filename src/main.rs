@@ -1,3 +1,4 @@
+use actions::ActionsPlugin;
 use bevy::prelude::*;
 
 use bevy_ecs_tilemap::TilemapPlugin;
@@ -30,6 +31,7 @@ use toolbar::ToolbarPlugin;
 use tree::TreePlugin;
 use world_generation::WorldGenerationPlugin;
 
+mod actions;
 mod ai_controller;
 mod climbable;
 mod crafting;
@@ -101,6 +103,7 @@ fn main() {
         .add_plugin(MainCameraPlugin)
         .add_plugin(DwarfPlugin)
         .add_plugin(LaborPlugin)
+        .add_plugin(ActionsPlugin)
         .add_plugin(DesignationLayerPlugin)
         .add_plugin(ToolbarPlugin)
         .add_plugin(TreePlugin)

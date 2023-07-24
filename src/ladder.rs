@@ -4,7 +4,7 @@ use bevy_rapier2d::prelude::{Collider, CollisionGroups, Group, RigidBody};
 
 use crate::{
     climbable::Climbable,
-    labor::build::{ConstructionCompletedEvent, CONSTRUCTION_COLLISION_GROUP},
+    labor::build_structure::{ConstructionCompletedEvent, CONSTRUCTION_COLLISION_GROUP},
 };
 
 pub struct LadderPlugin;
