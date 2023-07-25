@@ -129,7 +129,6 @@
             pkgs.wasm-bindgen-cli
             pkgs.binaryen
           ];
-          phases = ["unpackPhase" "installPhase"];
           installPhase = ''
             mkdir -p $out
             wasm-bindgen --out-dir $out --out-name basebuilder --target web ${self.packages.${system}.basebuilder-wasm}/bin/basebuilder.wasm
