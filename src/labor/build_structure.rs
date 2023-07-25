@@ -5,7 +5,7 @@ use bevy_ecs_tilemap::prelude::TilemapGridSize;
 use bevy_rapier2d::prelude::Group;
 
 use crate::{
-    cursor_position::CursorPosition,
+    cursor_position::LastCursorPosition,
     hovered_tile::{HoveredTile, HoveredTileSet},
     labor::job::{all_workers_eligible, AssignedJob, AtJobSite, Job, JobSite, Worker},
     ladder::spawn_ladder,
@@ -25,19 +25,23 @@ impl Plugin for BuildStructurePlugin {
         app.add_state::<BuildToolState>()
             .add_event::<ConstructionCompletedEvent>()
             .register_type::<ConstructionJob>()
-            .add_system(
+            .add_systems(
+                Update,
                 designate_construction
                     .run_if(state_exists_and_equals(BuildToolState::Placing))
                     .before(HoveredTileSet),
             )
-            .add_systems((
-                designate_building_materials,
-                materials_delivered,
-                all_workers_eligible::<ConstructionJob>,
-                start_building,
-                build_timer,
-                finish_building,
-            ));
+            .add_systems(
+                Update,
+                (
+                    designate_building_materials,
+                    materials_delivered,
+                    all_workers_eligible::<ConstructionJob>,
+                    start_building,
+                    build_timer,
+                    finish_building,
+                ),
+            );
 
         register_job::<ConstructionJob, Builder>(app);
     }
@@ -112,7 +116,7 @@ pub const BUILDING_LAYER_Z: f32 = 2.0;
 fn designate_construction(
     mut commands: Commands,
     mouse_button_input: Res<Input<MouseButton>>,
-    cursor_position: Res<CursorPosition>,
+    cursor_position: Res<LastCursorPosition>,
     hovered_tile_query: Query<&HoveredTile>,
     terrain_query: Query<&TilemapGridSize, With<Terrain>>,
     ghost_query: Query<Entity, With<Ghost>>,
@@ -331,6 +335,7 @@ fn build_timer(
     }
 }
 
+#[derive(Event)]
 pub struct ConstructionCompletedEvent {
     pub construction_site: Entity,
 }

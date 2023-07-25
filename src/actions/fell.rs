@@ -1,7 +1,7 @@
 use bevy::{
     prelude::{
         App, Commands, Component, Entity, EventReader, EventWriter, IntoSystemConfigs, Plugin,
-        Query, Res, With, Without,
+        Query, Res, Update, With, Without,
     },
     reflect::Reflect,
     time::{Time, Timer, TimerMode},
@@ -26,6 +26,7 @@ impl Plugin for FellPlugin {
         app.register_type::<Fell>()
             .register_type::<Felling>()
             .add_systems(
+                Update,
                 (
                     travel_to_entity::<Fell>,
                     start_felling,

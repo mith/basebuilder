@@ -20,12 +20,8 @@ impl Plugin for TreePlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<TreesState>()
             .add_event::<TreeDestroyedEvent>()
-            .add_system(
-                spawn_trees
-                    .in_schedule(OnEnter(MainState::Game))
-                    .after(TerrainSet),
-            )
-            .add_system(destroy_trees);
+            .add_systems(OnEnter(MainState::Game), spawn_trees.after(TerrainSet))
+            .add_systems(Update, destroy_trees);
     }
 }
 
@@ -108,6 +104,7 @@ fn spawn_tree(
         });
 }
 
+#[derive(Event)]
 pub struct TreeDestroyedEvent {
     pub tree: Entity,
 }

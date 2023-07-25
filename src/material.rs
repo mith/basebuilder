@@ -1,15 +1,21 @@
-use bevy::{prelude::*, reflect::TypeUuid};
+use bevy::{
+    prelude::*,
+    reflect::{TypePath, TypeUuid},
+};
 use bevy_common_assets::ron::RonAssetPlugin;
 
 pub struct MaterialPlugin;
 
 impl Plugin for MaterialPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(RonAssetPlugin::<Materials>::new(&["materials.ron"]))
+        app.add_plugins(RonAssetPlugin::<Materials>::new(&["materials.ron"]))
             .add_asset::<Materials>()
             .add_state::<MaterialsState>()
-            .add_system(load_materials.in_schedule(OnEnter(MaterialsState::Loading)))
-            .add_system(setup_materials.run_if(in_state(MaterialsState::Loading)));
+            .add_systems(OnEnter(MaterialsState::Loading), load_materials)
+            .add_systems(
+                Update,
+                setup_materials.run_if(in_state(MaterialsState::Loading)),
+            );
     }
 }
 
@@ -19,7 +25,7 @@ pub struct Material {
     pub color: Color,
 }
 
-#[derive(serde::Deserialize, TypeUuid)]
+#[derive(serde::Deserialize, TypeUuid, TypePath)]
 #[uuid = "2a18e173-bc60-4aa2-a02b-a63d97622ab0"]
 struct Materials(Vec<Material>);
 

@@ -2,9 +2,9 @@ use bevy::{
     ecs::system::SystemParam,
     math::Vec3Swizzles,
     prelude::{
-        apply_system_buffers, info, Added, App, Commands, Component, DespawnRecursiveExt, Entity,
+        apply_deferred, info, Added, App, Commands, Component, DespawnRecursiveExt, Entity, Event,
         EventReader, EventWriter, GlobalTransform, IntoSystemConfigs, Parent, Plugin, Query, Res,
-        SystemSet, Vec2, With, Without,
+        SystemSet, Update, Vec2, With, Without,
     },
     reflect::Reflect,
     time::{Time, Timer},
@@ -25,9 +25,10 @@ impl Plugin for JobPlugin {
             .register_type::<PathableWorkers>()
             .register_type::<EligibleWorkers>()
             .register_type::<JobSite>()
-            .add_systems((find_pathable_workers, blacklist_timer))
+            .add_systems(Update, (find_pathable_workers, blacklist_timer))
             .add_systems(
-                (apply_system_buffers, assign_jobs, apply_system_buffers)
+                Update,
+                (apply_deferred, assign_jobs, apply_deferred)
                     .chain()
                     .in_set(JobAssignmentSet),
             );
@@ -60,6 +61,7 @@ pub struct JobSite(pub Vec<Vec2>);
 #[derive(Component)]
 pub struct AtJobSite;
 
+#[derive(Event)]
 pub struct JobAssignedEvent {
     pub job: Entity,
     pub worker: Entity,
@@ -204,6 +206,7 @@ pub fn assign_jobs(
     }
 }
 
+#[derive(Event)]
 pub struct JobCompletedEvent<T> {
     job_entity: Entity,
     parent_job_entity: Option<Entity>,
@@ -216,10 +219,13 @@ where
     JobType: bevy::prelude::Component + std::clone::Clone,
     WorkerType: bevy::prelude::Component + Default + core::fmt::Debug,
 {
-    app.add_event::<JobCompletedEvent<JobType>>().add_systems((
-        job_assigned::<JobType, WorkerType>,
-        job_completed::<JobType, WorkerType>,
-    ));
+    app.add_event::<JobCompletedEvent<JobType>>().add_systems(
+        Update,
+        (
+            job_assigned::<JobType, WorkerType>,
+            job_completed::<JobType, WorkerType>,
+        ),
+    );
 }
 
 #[instrument(skip(commands, assigned_job_events, job_query))]

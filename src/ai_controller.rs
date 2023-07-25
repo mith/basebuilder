@@ -14,10 +14,11 @@ impl Plugin for AiControllerPlugin {
         app.add_event::<ArrivedAtTargetEvent>()
             .register_type::<Path>()
             .add_systems(
-                (invalidate_paths, apply_system_buffers, follow_path)
+                Update,
+                (invalidate_paths, apply_deferred, follow_path)
                     .chain()
                     .in_set(AiControllerSet)
-                    .distributive_run_if(in_state(MainState::Game))
+                    .run_if(in_state(MainState::Game))
                     .before(GravitySet)
                     .before(MovementSet)
                     .after(TerrainSet),
@@ -31,9 +32,10 @@ pub struct AiControllerSet;
 #[derive(Component)]
 pub struct AiControlled;
 
-#[derive(Component, Reflect, Clone, FromReflect)]
+#[derive(Component, Reflect, Clone)]
 pub struct Path(pub Vec<UVec2>);
 
+#[derive(Event)]
 pub struct ArrivedAtTargetEvent(pub Entity);
 
 fn follow_path(

@@ -11,7 +11,7 @@ pub struct LadderPlugin;
 
 impl Plugin for LadderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(finish_ladder_construction);
+        app.add_systems(Update, finish_ladder_construction);
     }
 }
 

@@ -1,5 +1,5 @@
 use bevy::{
-    prelude::{App, Commands, Component, Entity, Plugin, Query, Res, With},
+    prelude::{App, Commands, Component, Entity, Plugin, Query, Res, Update, With},
     time::{Time, Timer, TimerMode},
     utils::HashMap,
 };
@@ -14,7 +14,7 @@ pub struct StuckPlugin;
 
 impl Plugin for StuckPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems((stuck, stuck_timer));
+        app.add_systems(Update, (stuck, stuck_timer));
     }
 }
 

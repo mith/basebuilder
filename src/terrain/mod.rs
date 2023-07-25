@@ -30,30 +30,36 @@ impl Plugin for TerrainPlugin {
         app.add_event::<TileDamageEvent>()
             .add_event::<TileDestroyedEvent>()
             .add_systems(
-                (setup_terrain, spawn_tilemap)
-                    .distributive_run_if(resource_exists::<TerrainSettings>()),
+                Update,
+                (setup_terrain, spawn_tilemap).run_if(resource_exists::<TerrainSettings>()),
             )
-            .add_system(
+            .add_systems(
+                Update,
                 spawn_tilemap
-                    .in_set(OnUpdate(MainState::Game))
+                    .run_if(in_state(MainState::Game))
                     .in_set(TerrainSet),
             )
             .add_systems(
-                (update_terrain, apply_system_buffers)
+                Update,
+                (update_terrain, apply_deferred)
                     .chain()
-                    .in_set(OnUpdate(MainState::Game))
+                    .run_if(in_state(MainState::Game))
                     .in_set(TerrainSet)
                     .in_set(TerrainUpdateSet),
             )
             .add_systems(
+                Update,
                 (color_damage_tile, remove_destroyed_tiles)
-                    .in_set(OnUpdate(MainState::Game))
+                    .run_if(in_state(MainState::Game))
                     .in_set(TerrainSet)
                     .after(TerrainUpdateSet),
             );
 
         #[cfg(feature = "async")]
-        app.add_system(spawn_terrain_data.run_if(resource_exists::<TerrainSettings>()));
+        app.add_systems(
+            Update,
+            spawn_terrain_data.run_if(resource_exists::<TerrainSettings>()),
+        );
     }
 }
 
@@ -250,6 +256,7 @@ fn spawn_tilemap(
     }
 }
 
+#[derive(Event)]
 pub struct TileDamageEvent {
     pub tile: Entity,
     pub damage: u32,
@@ -289,6 +296,7 @@ fn color_damage_tile(
     }
 }
 
+#[derive(Event)]
 pub struct TileDestroyedEvent {
     pub entity: Entity,
     pub tile_pos: TilePos,

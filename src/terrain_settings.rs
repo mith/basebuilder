@@ -1,5 +1,8 @@
-use ahash::{HashMap, HashMapExt};
-use bevy::{prelude::*, reflect::TypeUuid};
+use bevy::{
+    prelude::*,
+    reflect::{TypePath, TypeUuid},
+    utils::HashMap,
+};
 use bevy_common_assets::ron::RonAssetPlugin;
 
 use crate::material::MaterialProperties;
@@ -8,14 +11,18 @@ pub struct TerrainSettingsPlugin;
 
 impl Plugin for TerrainSettingsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(RonAssetPlugin::<TerrainSettingsRaw>::new(&[
+        app.add_plugins(RonAssetPlugin::<TerrainSettingsRaw>::new(&[
             "terrain_settings.ron",
         ]))
         .register_type::<TerrainSettings>()
         .add_asset::<TerrainSettingsRaw>()
         .add_state::<TerrainSettingsState>()
-        .add_system(load_terrain_settings.in_schedule(OnEnter(TerrainSettingsState::Loading)))
-        .add_system(
+        .add_systems(
+            OnEnter(TerrainSettingsState::Loading),
+            load_terrain_settings,
+        )
+        .add_systems(
+            Update,
             setup_terrain_settings
                 .run_if(in_state(TerrainSettingsState::Loading))
                 .run_if(resource_exists::<MaterialProperties>()),
@@ -23,7 +30,7 @@ impl Plugin for TerrainSettingsPlugin {
     }
 }
 
-#[derive(serde::Deserialize, Clone, TypeUuid)]
+#[derive(serde::Deserialize, Clone, TypeUuid, TypePath)]
 #[uuid = "66ab7e1f-9767-4d9a-a3eb-db238bc75603"]
 struct TerrainSettingsRaw {
     width: u32,

@@ -21,11 +21,8 @@ pub struct DwarfPlugin;
 
 impl Plugin for DwarfPlugin {
     fn build(&self, app: &mut App) {
-        app.add_state::<DwarvesState>().add_system(
-            spawn_dwarves
-                .in_schedule(OnEnter(MainState::Game))
-                .after(TerrainSet),
-        );
+        app.add_state::<DwarvesState>()
+            .add_systems(OnEnter(MainState::Game), spawn_dwarves.after(TerrainSet));
     }
 }
 

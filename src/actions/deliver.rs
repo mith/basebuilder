@@ -1,7 +1,7 @@
 use bevy::{
     prelude::{
         App, BuildChildren, Commands, Component, Entity, IntoSystemConfigs, Parent, Plugin, Query,
-        With,
+        Update, With,
     },
     reflect::Reflect,
 };
@@ -20,7 +20,10 @@ impl Plugin for DeliverPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Deliver>()
             .register_type::<Delivering>()
-            .add_systems((travel_to_entity::<Deliver>, complete_delivery).before(ActionSet));
+            .add_systems(
+                Update,
+                (travel_to_entity::<Deliver>, complete_delivery).before(ActionSet),
+            );
 
         register_action::<Deliver, Delivering>(app);
     }

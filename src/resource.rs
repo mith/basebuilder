@@ -9,6 +9,7 @@ pub struct BuildingMaterialPlugin;
 impl Plugin for BuildingMaterialPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BuildingMaterialRegistry>().add_systems(
+            Update,
             (register_building_material, deregister_building_material).in_set(BuildingMaterialSet),
         );
     }

@@ -18,25 +18,25 @@ opt-level = "z"
 opt-level = 3
 
 [dependencies]
-bevy-inspector-egui = { version = "0.18.0", optional = true, default-features = false }
+bevy-inspector-egui = { version = "0.19.0", optional = true, default-features = false }
 ndarray = "0.15.6"
-bevy_ecs_tilemap = "0.10.0"
-bevy_rapier2d = { version = "0.21.0", features = ["wasm-bindgen"] }
-bevy_common_assets = { version = "0.5.0", features = ["ron"] }
-serde = "1.0.155"
+bevy_ecs_tilemap = "0.11.0"
+bevy_rapier2d = { version = "0.22.0", features = ["wasm-bindgen"] }
+bevy_common_assets = { version = "0.7.0", features = ["ron"] }
+serde = "1.0.175"
 noise = "0.8.2"
 rand = "0.8.5"
 fast_poisson = "0.5.2"
-ahash = "0.8.3"
 rand_xoshiro = "0.6.0"
 futures-lite = { version = "1.12.0", optional = true }
-egui = "0.21.0"
-bevy_egui = "0.20.3"
+egui = "0.22.0"
+bevy_egui = "0.21.0"
 tracing = "0.1.37"
-pathfinding = "4.2.1"
+pathfinding = "4.3.0"
+big-brain = "0.18.0"
 
 [dependencies.bevy]
-version = "0.10"
+version = "0.11"
 default-features = false
 features = [
     "bevy_asset",
@@ -51,10 +51,10 @@ features = [
 ]
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-bevy_ecs_tilemap = { version = "0.10.0", features = ["atlas"] }
+bevy_ecs_tilemap = { version = "0.11.0", features = ["atlas"] }
 
 [target.'cfg(unix)'.dependencies.bevy]
-version = "0.10"
+version = "0.11"
 default-features = false
 features = [
     "bevy_asset",

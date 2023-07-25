@@ -6,7 +6,7 @@ pub struct MainCameraPlugin;
 
 impl Plugin for MainCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(spawn_camera.in_schedule(OnEnter(MainState::Game)));
+        app.add_systems(OnEnter(MainState::Game), spawn_camera);
     }
 }
 

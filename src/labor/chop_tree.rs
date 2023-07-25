@@ -4,7 +4,7 @@ use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
     actions::{action::Action, fell::Fell},
-    cursor_position::CursorPosition,
+    cursor_position::LastCursorPosition,
     designation_layer::Designated,
     labor::job::{all_workers_eligible, Complete, Job, JobSite},
     tree::{Tree, TreeDestroyedEvent, TREE_COLLISION_GROUP},
@@ -20,6 +20,7 @@ impl Plugin for ChopTreePlugin {
             .add_state::<FellingToolState>()
             .register_type::<FellingJob>()
             .add_systems(
+                Update,
                 (
                     mark_trees.run_if(state_exists_and_equals(FellingToolState::Designating)),
                     all_workers_eligible::<FellingJob>,
@@ -48,7 +49,7 @@ pub const PICKER_COLLISION_GROUP: Group = Group::GROUP_4;
 fn mark_trees(
     mut commands: Commands,
     mouse_button_input: Res<Input<MouseButton>>,
-    cursor_position: Res<CursorPosition>,
+    cursor_position: Res<LastCursorPosition>,
     rapier_context: Res<RapierContext>,
     parent_query: Query<&Parent>,
     tree_query: Query<&GlobalTransform, With<Tree>>,
@@ -114,6 +115,7 @@ fn start_felling_job(
     }
 }
 
+#[derive(Event)]
 pub struct FellingCompleteEvent {
     pub job: Entity,
     pub parent_job: Option<Entity>,

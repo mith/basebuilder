@@ -1,7 +1,8 @@
 use bevy::{
     math::Vec3Swizzles,
     prelude::{
-        App, Commands, Component, Entity, GlobalTransform, Parent, Plugin, Query, Vec2, Without,
+        App, Commands, Component, Entity, GlobalTransform, Parent, Plugin, Query, Update, Vec2,
+        Without,
     },
     reflect::Reflect,
 };
@@ -15,7 +16,7 @@ pub struct MoveToPlugin;
 
 impl Plugin for MoveToPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<MoveTo>().add_system(move_to);
+        app.register_type::<MoveTo>().add_systems(Update, move_to);
     }
 }
 

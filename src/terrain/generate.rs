@@ -3,8 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ahash::{AHasher, RandomState};
-use bevy::prelude::{Component, IVec2};
+use bevy::{
+    prelude::{Component, IVec2},
+    utils::{AHasher, RandomState},
+};
 use fast_poisson::Poisson2D;
 use ndarray::Array2;
 use noise::{NoiseFn, Seedable, SuperSimplex, TranslatePoint, Turbulence};

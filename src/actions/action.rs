@@ -2,10 +2,11 @@ use std::collections::VecDeque;
 
 use bevy::{
     prelude::{
-        apply_system_buffers, Added, App, Children, Commands, Component, DespawnRecursiveExt,
-        Entity, EventWriter, IntoSystemConfigs, Parent, Plugin, Query, SystemSet, With, Without,
+        apply_deferred, Added, App, Children, Commands, Component, DespawnRecursiveExt, Entity,
+        Event, EventWriter, IntoSystemConfigs, Parent, Plugin, Query, SystemSet, Update, With,
+        Without,
     },
-    reflect::{FromReflect, Reflect},
+    reflect::Reflect,
 };
 use tracing::info;
 
@@ -20,7 +21,8 @@ impl Plugin for ActionPlugin {
             .add_event::<ActionStartedEvent>()
             .add_event::<ActionSuspensedEvent>()
             .add_systems(
-                (apply_system_buffers, start_next_action)
+                Update,
+                (apply_deferred, start_next_action)
                     .chain()
                     .in_set(ActionSet),
             );
@@ -30,7 +32,7 @@ impl Plugin for ActionPlugin {
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub struct ActionSet;
 
-#[derive(Component, Default, Debug, Reflect, FromReflect)]
+#[derive(Component, Default, Debug, Reflect)]
 pub struct Action;
 
 #[derive(Component, Default, Debug, Reflect)]
@@ -46,6 +48,7 @@ where
 {
     app.add_event::<ActionCompletedEvent<ActionType>>()
         .add_systems(
+            Update,
             (
                 action_started::<ActionType, PerformerType>,
                 action_completed::<ActionType, PerformerType>,
@@ -58,6 +61,7 @@ where
 #[derive(Component, Debug, Default, Reflect)]
 pub struct StartedAction;
 
+#[derive(Event)]
 pub struct ActionStartedEvent {
     pub action_entity: Entity,
     pub performer_entity: Entity,
@@ -85,6 +89,7 @@ fn action_started<ActionType, PerformerType>(
     }
 }
 
+#[derive(Event)]
 pub struct ActionCompletedEvent<A: Component> {
     pub action_entity: Entity,
     pub performer_entity: Entity,
@@ -118,6 +123,7 @@ fn action_completed<ActionType: Component + Clone, PerformerType: Component>(
 #[derive(Component, Debug, Default, Reflect)]
 pub struct SuspendedAction;
 
+#[derive(Event)]
 pub struct ActionSuspensedEvent {
     pub action_entity: Entity,
     pub performer_entity: Entity,

@@ -1,4 +1,7 @@
-use bevy::{math::Vec3Swizzles, prelude::*};
+use bevy::{
+    math::{Vec2Swizzles, Vec3Swizzles},
+    prelude::*,
+};
 use bevy_ecs_tilemap::{
     prelude::*,
     tiles::{TileColor, TilePos, TileStorage},
@@ -6,7 +9,7 @@ use bevy_ecs_tilemap::{
 };
 
 use crate::{
-    cursor_position::CursorPosition,
+    cursor_position::LastCursorPosition,
     main_state::MainState,
     terrain::{TerrainParams, TerrainSet, TileDestroyedEvent},
     terrain_settings::TerrainSettings,
@@ -16,16 +19,17 @@ pub struct HoveredTilePlugin;
 
 impl Plugin for HoveredTilePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(setup_hovered_layer.in_schedule(OnEnter(MainState::Game)))
+        app.add_systems(OnEnter(MainState::Game), setup_hovered_layer)
             .add_systems(
+                Update,
                 (
                     hovered_tile,
-                    apply_system_buffers,
+                    apply_deferred,
                     highlight_hovered_tile,
                     unhighlight_hovered_tile,
                 )
                     .chain()
-                    .in_set(OnUpdate(MainState::Game))
+                    .run_if(in_state(MainState::Game))
                     .in_set(HoveredTileSet)
                     .after(TerrainSet),
             );
@@ -84,7 +88,7 @@ pub struct HoveredTile;
 
 fn hovered_tile(
     mut commands: Commands,
-    cursor_pos: Res<CursorPosition>,
+    cursor_pos: Res<LastCursorPosition>,
     hovered_tiles_query: Query<Entity, With<HoveredTile>>,
     terrain: TerrainParams,
 ) {

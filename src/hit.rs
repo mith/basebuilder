@@ -7,14 +7,17 @@ pub struct HitPlugin;
 
 impl Plugin for HitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<HitEvent>()
-            .add_systems((hits.before(HealthSet), blood_particles).in_set(HitSet));
+        app.add_event::<HitEvent>().add_systems(
+            Update,
+            (hits.before(HealthSet), blood_particles).in_set(HitSet),
+        );
     }
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HitSet;
 
+#[derive(Event)]
 pub struct HitEvent {
     pub entity: Entity,
     pub intersection: RayIntersection,

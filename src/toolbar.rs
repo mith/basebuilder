@@ -9,7 +9,7 @@ pub struct ToolbarPlugin;
 
 impl Plugin for ToolbarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(toolbar);
+        app.add_systems(Update, toolbar);
     }
 }
 

@@ -1,7 +1,7 @@
 use bevy::{
     prelude::{
-        App, Commands, Component, Entity, EventReader, EventWriter, IntoSystemConfig, Plugin,
-        Query, Res, With, Without,
+        App, Commands, Component, Entity, EventReader, EventWriter, IntoSystemConfigs, Plugin,
+        Query, Res, Update, With, Without,
     },
     reflect::Reflect,
     time::{Time, Timer, TimerMode},
@@ -21,12 +21,15 @@ impl Plugin for DigPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Dig>()
             .register_type::<DigTimer>()
-            .add_systems((
-                travel_to_nearby_tiles::<Dig>,
-                start_digging,
-                dig_timer.before(TerrainSet),
-                finish_digging,
-            ));
+            .add_systems(
+                Update,
+                (
+                    travel_to_nearby_tiles::<Dig>,
+                    start_digging,
+                    dig_timer.before(TerrainSet),
+                    finish_digging,
+                ),
+            );
 
         register_action::<Dig, Digging>(app);
     }

@@ -5,7 +5,7 @@ pub struct GravityPlugin;
 
 impl Plugin for GravityPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(gravity.in_set(GravitySet));
+        app.add_systems(Update, gravity.in_set(GravitySet));
     }
 }
 

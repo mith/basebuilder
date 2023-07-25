@@ -14,13 +14,14 @@ pub struct DebugPlugin;
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "inspector")]
-        app.add_plugin(WorldInspectorPlugin::default().run_if(resource_exists::<Inspector>()));
+        app.add_plugins(WorldInspectorPlugin::default().run_if(resource_exists::<Inspector>()));
 
-        app.add_plugin(RapierDebugRenderPlugin {
+        app.add_plugins(RapierDebugRenderPlugin {
             enabled: false,
             ..default()
         })
         .add_systems(
+            Update,
             (
                 toggle_physics_debug,
                 toggle_freelook_camera,
@@ -29,7 +30,7 @@ impl Plugin for DebugPlugin {
             )
                 .in_set(DebugSet),
         )
-        .add_plugin(PathfindingDebugPlugin);
+        .add_plugins(PathfindingDebugPlugin);
     }
 }
 
@@ -95,7 +96,7 @@ fn toggle_pathfinding_debug(
     mut next_state: ResMut<NextState<PathfindingDebugState>>,
 ) {
     if keyboard_input.just_pressed(KeyCode::F4) {
-        match current_state.0 {
+        match current_state.get() {
             PathfindingDebugState::Enabled => {
                 next_state.set(PathfindingDebugState::Disabled);
             }

@@ -78,37 +78,44 @@ fn main() {
         )
         .insert_resource(ClearColor(Color::BLACK));
     // Add third-party plugins
-    app.add_plugin(TilemapPlugin)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.))
-        .add_plugin(EguiPlugin);
+    app.add_plugins((
+        TilemapPlugin,
+        RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+        EguiPlugin,
+    ));
 
     // Add crate plugins
-    app.add_plugin(MainStatePlugin)
-        .add_plugin(LoadPlugin)
-        .add_plugin(DebugPlugin)
-        .add_plugin(CursorPositionPlugin)
-        .add_plugin(PanZoomCamera2dPlugin)
-        .add_plugin(MaterialPlugin)
-        .add_plugin(ItemPlugin)
-        .add_plugin(TerrainSettingsPlugin)
-        .add_plugin(TerrainPlugin)
-        .add_plugin(WorldGenerationPlugin)
-        .add_plugin(HoveredTilePlugin)
-        .add_plugin(AiControllerPlugin)
-        .add_plugin(GravityPlugin)
-        .add_plugin(HealthPlugin)
-        .add_plugin(MovementPlugin)
-        .add_plugin(ClimbablePlugin)
-        .add_plugin(HitPlugin)
-        .add_plugin(MainCameraPlugin)
-        .add_plugin(DwarfPlugin)
-        .add_plugin(LaborPlugin)
-        .add_plugin(ActionsPlugin)
-        .add_plugin(DesignationLayerPlugin)
-        .add_plugin(ToolbarPlugin)
-        .add_plugin(TreePlugin)
-        .add_plugin(BuildingMaterialPlugin)
-        .add_plugin(LadderPlugin);
+    app.add_plugins((
+        MainStatePlugin,
+        LoadPlugin,
+        DebugPlugin,
+        CursorPositionPlugin,
+        PanZoomCamera2dPlugin,
+        MaterialPlugin,
+        ItemPlugin,
+        TerrainSettingsPlugin,
+        TerrainPlugin,
+        WorldGenerationPlugin,
+        HoveredTilePlugin,
+        AiControllerPlugin,
+    ));
+
+    app.add_plugins((
+        GravityPlugin,
+        HealthPlugin,
+        MovementPlugin,
+        ClimbablePlugin,
+        HitPlugin,
+        MainCameraPlugin,
+        DwarfPlugin,
+        LaborPlugin,
+        ActionsPlugin,
+        DesignationLayerPlugin,
+        ToolbarPlugin,
+        TreePlugin,
+        BuildingMaterialPlugin,
+        LadderPlugin,
+    ));
 
     app.run();
 }

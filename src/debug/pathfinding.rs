@@ -10,11 +10,12 @@ impl Plugin for PathfindingDebugPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<PathfindingDebugState>()
             .add_systems(
+                Update,
                 (render_paths, despawn_removed_paths)
-                    .distributive_run_if(in_state(PathfindingDebugState::Enabled))
+                    .run_if(in_state(PathfindingDebugState::Enabled))
                     .in_set(DebugSet),
             )
-            .add_system(despawn_debug_nodes.in_schedule(OnExit(PathfindingDebugState::Enabled)));
+            .add_systems(OnExit(PathfindingDebugState::Enabled), despawn_debug_nodes);
     }
 }
 

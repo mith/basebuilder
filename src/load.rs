@@ -8,7 +8,8 @@ pub struct LoadPlugin;
 
 impl Plugin for LoadPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(
+        app.add_systems(
+            Update,
             start_map_generation
                 .run_if(in_state(MainState::Loading))
                 .run_if(in_state(MaterialsState::Loaded))

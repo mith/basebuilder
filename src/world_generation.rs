@@ -7,8 +7,9 @@ pub struct WorldGenerationPlugin;
 
 impl Plugin for WorldGenerationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(spawn_terrain.in_schedule(OnEnter(MainState::MapGeneration)))
-            .add_system(
+        app.add_systems(OnEnter(MainState::MapGeneration), spawn_terrain)
+            .add_systems(
+                Update,
                 main_map_generated
                     .run_if(resource_exists::<MainMap>())
                     .run_if(in_state(MainState::MapGeneration)),

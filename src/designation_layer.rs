@@ -13,16 +13,17 @@ pub struct DesignationLayerPlugin;
 
 impl Plugin for DesignationLayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(setup_designation_layer.in_schedule(OnEnter(MainState::Game)))
+        app.add_systems(OnEnter(MainState::Game), setup_designation_layer)
             .add_systems(
+                Update,
                 (
-                    apply_system_buffers,
+                    apply_deferred,
                     highlight_designated_tile,
                     unhighlight_designated_tile,
                     highlight_designated_mesh,
                 )
                     .chain()
-                    .in_set(OnUpdate(MainState::Game))
+                    .run_if(in_state(MainState::Game))
                     .in_set(DesignationLayerSet),
             );
     }

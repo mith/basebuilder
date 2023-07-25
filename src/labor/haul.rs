@@ -16,6 +16,7 @@ pub struct HaulPlugin;
 impl Plugin for HaulPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<HaulCompletedEvent>().add_systems(
+            Update,
             (
                 all_workers_eligible::<Haul>,
                 start_haul_job,
@@ -192,6 +193,7 @@ fn start_delivery(
     }
 }
 
+#[derive(Event)]
 pub struct HaulCompletedEvent {
     pub job: Entity,
     pub parent_job: Option<Entity>,

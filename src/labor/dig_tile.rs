@@ -22,12 +22,15 @@ impl Plugin for DigPlugin {
             .register_type::<DigJob>()
             .register_type::<DigToolState>()
             .add_state::<DigToolState>()
-            .add_systems((
-                designate_dig.run_if(state_exists_and_equals(DigToolState::Designating)),
-                all_workers_eligible::<DigJob>,
-                schedule_dig_action,
-                finish_digjob,
-            ));
+            .add_systems(
+                Update,
+                (
+                    designate_dig.run_if(state_exists_and_equals(DigToolState::Designating)),
+                    all_workers_eligible::<DigJob>,
+                    schedule_dig_action,
+                    finish_digjob,
+                ),
+            );
 
         register_job::<DigJob, Digger>(app);
     }
@@ -113,6 +116,7 @@ fn schedule_dig_action(
     }
 }
 
+#[derive(Event)]
 pub struct DigJobCompleteEvent {
     pub job: Entity,
     pub parent_job: Option<Entity>,

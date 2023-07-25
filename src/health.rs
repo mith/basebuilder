@@ -6,7 +6,7 @@ impl Plugin for HealthPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Health>()
             .add_event::<HealthDamageEvent>()
-            .add_system(update_health.in_set(HealthSet));
+            .add_systems(Update, update_health.in_set(HealthSet));
     }
 }
 
@@ -15,6 +15,7 @@ pub struct HealthSet;
 #[derive(Component, Reflect)]
 pub struct Health(pub u32);
 
+#[derive(Event)]
 pub struct HealthDamageEvent {
     pub entity: Entity,
     pub damage: u32,

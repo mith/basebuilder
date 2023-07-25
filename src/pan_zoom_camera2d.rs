@@ -4,7 +4,7 @@ pub struct PanZoomCamera2dPlugin;
 
 impl Plugin for PanZoomCamera2dPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems((camera_zoom, drag_camera));
+        app.add_systems(Update, (camera_zoom, drag_camera));
     }
 }
 

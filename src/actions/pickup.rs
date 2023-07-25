@@ -12,6 +12,7 @@ pub struct PickupPlugin;
 impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Pickup>().add_systems(
+            Update,
             (
                 travel_to_entity::<Pickup>,
                 all_workers_eligible::<Pickup>,

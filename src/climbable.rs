@@ -7,7 +7,7 @@ pub struct ClimbablePlugin;
 
 impl Plugin for ClimbablePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems((create_climbable_map, update_climbable_map));
+        app.add_systems(Update, (create_climbable_map, update_climbable_map));
     }
 }
 
