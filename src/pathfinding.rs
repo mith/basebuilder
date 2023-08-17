@@ -28,13 +28,13 @@ impl<'w, 's> Pathfinding<'w, 's> {
         };
         let terrain_data = self.terrain.terrain_data_query.single();
         let climbable_map = self.climbable_map_query.single();
-        let path = find_path(
+
+        find_path(
             terrain_data,
             Some(climbable_map),
             start_tile_pos.into(),
             target_tile_pos.into(),
-        );
-        path
+        )
     }
 }
 
@@ -77,12 +77,10 @@ pub fn find_path(
                     {
                         successors.push((target_tile_pos.into(), 1));
                     }
-                } else {
-                    if can_stand_or_climb(terrain_data, climbable_map, target_tile_pos)
-                        && can_move_to(terrain_data, climbable_map, tile_pos, *direction)
-                    {
-                        successors.push((target_tile_pos.into(), 1));
-                    }
+                } else if can_stand_or_climb(terrain_data, climbable_map, target_tile_pos)
+                    && can_move_to(terrain_data, climbable_map, tile_pos, *direction)
+                {
+                    successors.push((target_tile_pos.into(), 1));
                 }
             }
             successors
@@ -125,7 +123,7 @@ pub fn can_stand_or_climb(
 
 pub fn can_climb(climbable_map: Option<&ClimbableMap>, tile_pos: TilePos) -> bool {
     if let Some(climbable_map) = climbable_map {
-        let tile_is_climbable = climbable_map.is_climbable(tile_pos.into());
+        let tile_is_climbable = climbable_map.is_climbable(tile_pos);
         if tile_is_climbable {
             return true;
         }
@@ -149,7 +147,7 @@ pub fn can_stand(terrain_data: &TerrainData, tile_pos: TilePos) -> bool {
     let south_tile_is_solid = terrain_data
         .get_tile(south_tile_pos.into())
         .map_or(false, |tile| tile != 0);
-    return south_tile_is_solid;
+    south_tile_is_solid
 }
 
 pub fn can_move_to(
@@ -174,13 +172,13 @@ pub fn can_move_to(
     if let Some(climbable_map) = climbable_map {
         if direction == SquareDirection::South {
             // if moving to tile above, check if current tile is climbable
-            let current_is_climbable = climbable_map.is_climbable(tile_pos.into());
+            let current_is_climbable = climbable_map.is_climbable(tile_pos);
             if current_is_climbable {
                 return true;
             }
         } else if direction == SquareDirection::North {
             // if moving to tile below, check if next tile is climbable
-            let next_is_climbable = climbable_map.is_climbable(new_tile_pos.into());
+            let next_is_climbable = climbable_map.is_climbable(new_tile_pos);
             return next_is_climbable;
         }
     }
@@ -194,7 +192,7 @@ pub fn can_move_to(
             let north_tile_is_empty = terrain_data
                 .get_tile(north_tile_pos.into())
                 .map_or(false, |tile| tile == 0);
-            return north_tile_is_empty;
+            north_tile_is_empty
         }
 
         SquareDirection::SouthEast => {
@@ -206,7 +204,7 @@ pub fn can_move_to(
             let east_tile_is_empty = terrain_data
                 .get_tile(east_tile_pos.into())
                 .map_or(false, |tile| tile == 0);
-            return east_tile_is_empty;
+            east_tile_is_empty
         }
         SquareDirection::SouthWest => {
             let Some(west_tile_pos) = tile_pos.square_offset(&SquareDirection::West, &map_size) else {
@@ -217,7 +215,7 @@ pub fn can_move_to(
             let west_tile_is_empty = terrain_data
                 .get_tile(west_tile_pos.into())
                 .map_or(false, |tile| tile == 0);
-            return west_tile_is_empty;
+            west_tile_is_empty
         }
         SquareDirection::West | SquareDirection::East => {
             let Some(_target_tile_pos) = tile_pos.square_offset(&direction, &map_size) else {
@@ -225,10 +223,8 @@ pub fn can_move_to(
                 return false;
             };
 
-            return true;
+            true
         }
-        _ => {
-            return false;
-        }
+        _ => false,
     }
 }

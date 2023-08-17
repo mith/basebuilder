@@ -32,7 +32,7 @@ fn deliver(
     mut deliver_query: Query<(&Actor, &mut Deliver, &mut ActionState, &ActionSpan)>,
     global_transform_query: Query<&GlobalTransform>,
 ) {
-    for (actor, mut deliver, mut action_state, span) in &mut deliver_query {
+    for (actor, deliver, mut action_state, span) in &mut deliver_query {
         let _guard = span.span().enter();
 
         match *action_state {

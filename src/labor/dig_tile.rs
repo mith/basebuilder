@@ -88,13 +88,13 @@ fn designate_dig(
 struct AwaitingDig(pub Entity);
 
 fn schedule_dig_action(
-    mut commands: Commands,
+    _commands: Commands,
     dig_job_query: Query<
         (Entity, &DigJob, &AssignedWorker, &JobSite),
         (Without<AwaitingDig>, Without<Complete>),
     >,
 ) {
-    for (job_entity, DigJob(tile_entity), AssignedWorker(worker_entity), job_site) in
+    for (_job_entity, DigJob(_tile_entity), AssignedWorker(_worker_entity), _job_site) in
         &mut dig_job_query.iter()
     {}
 }
@@ -108,14 +108,14 @@ pub struct DigJobCompleteEvent {
 }
 
 fn finish_digjob(
-    mut commands: Commands,
-    dig_job_query: Query<(
+    _commands: Commands,
+    _dig_job_query: Query<(
         Entity,
         &DigJob,
         &AwaitingDig,
         &AssignedWorker,
         Option<&Parent>,
     )>,
-    mut digging_complete_event_writer: EventWriter<DigJobCompleteEvent>,
+    _digging_complete_event_writer: EventWriter<DigJobCompleteEvent>,
 ) {
 }

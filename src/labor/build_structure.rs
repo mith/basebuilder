@@ -62,15 +62,9 @@ pub struct Ghost;
 
 pub const CONSTRUCTION_COLLISION_GROUP: Group = Group::GROUP_7;
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UnderConstruction {
     progress: u32,
-}
-
-impl Default for UnderConstruction {
-    fn default() -> Self {
-        Self { progress: 0 }
-    }
 }
 
 impl UnderConstruction {

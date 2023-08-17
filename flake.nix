@@ -164,13 +164,17 @@
               alejandra.enable = true;
               statix.enable = true;
               rustfmt.enable = true;
-              clippy = {
-                enable = false;
-                entry = let
-                  rust-clippy = rust-clippy.withComponents ["clippy"];
-                in
-                  pkgs.lib.mkForce "${rust-clippy}/bin/cargo-clippy clippy";
-              };
+              # clippy = {
+              #   enable = true;
+              #   entry = let
+              #     rust-clippy = rust-clippy.withComponents ["clippy"];
+              #   in
+              #     pkgs.lib.mkForce "${rust-clippy}/bin/cargo-clippy clippy";
+              # };
+              # cargo-check.enable = true;
+              html-tidy.enable = true;
+              # taplo-fmt.enable = true;
+              actionlint.enable = true;
             };
           };
         };

@@ -145,7 +145,7 @@ fn unhighlight_hovered_tile(
         if let Ok(tile_pos) = tile_query.get(unhovered_tile_entity) {
             if let Some(hover_tile_entity) = hovertile_storage.get(tile_pos) {
                 commands.entity(hover_tile_entity).despawn_recursive();
-                hovertile_storage.remove(&tile_pos);
+                hovertile_storage.remove(tile_pos);
             }
         } // else: tile was destroyed and tile_pos can no longer be queried
     }

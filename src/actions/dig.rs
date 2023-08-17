@@ -1,7 +1,7 @@
 use bevy::{
     prelude::{
         App, Commands, Component, Entity, EventReader, EventWriter, GlobalTransform,
-        IntoSystemConfigs, Plugin, PreUpdate, Query, Res, Update, With, Without,
+        IntoSystemConfigs, Plugin, PreUpdate, Query, Res, Update,
     },
     reflect::Reflect,
     time::{Time, Timer, TimerMode},
@@ -59,8 +59,8 @@ fn dig(
                 let tile_position = get_entity_position(&global_transform_query, dig.0);
 
                 if actor_position.distance(tile_position) < 16. {
-                    if let Some(dig_timer) = dig_timer_query.get_mut(actor.0).ok() {
-                        if let Some(tile_destroyed_event) = tile_destroyed_event_reader
+                    if let Ok(dig_timer) = dig_timer_query.get_mut(actor.0) {
+                        if let Some(_tile_destroyed_event) = tile_destroyed_event_reader
                             .iter()
                             .find(|event| event.entity == dig_timer.tile_entity)
                         {

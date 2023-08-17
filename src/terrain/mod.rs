@@ -19,10 +19,7 @@ use crate::{
     main_state::MainState, material::MaterialProperties, terrain_settings::TerrainSettings,
 };
 
-use terrain_gen::{
-    create_terrain_generator_function, generate_terrain, GeneratorFunction,
-    TerrainGeneratorSettings,
-};
+use terrain_gen::{create_terrain_generator_function, generate_terrain, GeneratorFunction};
 
 pub use self::terrain_params::TerrainParams;
 pub struct TerrainPlugin;
@@ -144,17 +141,15 @@ fn setup_terrain(
             Name::new("Background"),
             MaterialMesh2dBundle {
                 transform: Transform::from_xyz(
-                    -terrain_settings.cell_size as f32 / 2.
-                        + 0.5 * terrain_settings.cell_size as f32,
-                    -terrain_settings.cell_size as f32 / 2.
-                        + 0.5 * terrain_settings.cell_size as f32,
+                    -terrain_settings.cell_size / 2. + 0.5 * terrain_settings.cell_size,
+                    -terrain_settings.cell_size / 2. + 0.5 * terrain_settings.cell_size,
                     TERRAIN_LAYER_Z,
                 ),
                 material: materials.add(Color::TEAL.into()),
                 mesh: meshes
                     .add(Mesh::from(shape::Quad::new(Vec2::new(
-                        terrain_settings.cell_size as f32 * terrain_settings.width as f32,
-                        terrain_settings.cell_size as f32 * terrain_settings.height as f32,
+                        terrain_settings.cell_size * terrain_settings.width as f32,
+                        terrain_settings.cell_size * terrain_settings.height as f32,
                     ))))
                     .into(),
                 ..default()
@@ -212,9 +207,9 @@ fn spawn_tilemap(
 
         let terrain_transform = Transform::from_translation(Vec3::new(
             -(terrain_settings.width as f32 * terrain_settings.cell_size) / 2.0
-                + 0.5 * terrain_settings.cell_size as f32,
+                + 0.5 * terrain_settings.cell_size,
             -(terrain_settings.height as f32 * terrain_settings.cell_size) / 2.0
-                + 0.5 * terrain_settings.cell_size as f32,
+                + 0.5 * terrain_settings.cell_size,
             TERRAIN_LAYER_Z,
         ));
 
@@ -236,8 +231,8 @@ fn spawn_tilemap(
                             ..default()
                         },
                         TransformBundle::from_transform(Transform::from_translation(Vec3::new(
-                            x as f32 * terrain_settings.cell_size as f32,
-                            y as f32 * terrain_settings.cell_size as f32,
+                            x as f32 * terrain_settings.cell_size,
+                            y as f32 * terrain_settings.cell_size,
                             0.0,
                         ))),
                     ))
@@ -247,8 +242,8 @@ fn spawn_tilemap(
         }
 
         let tile_size = TilemapTileSize {
-            x: terrain_settings.cell_size as f32,
-            y: terrain_settings.cell_size as f32,
+            x: terrain_settings.cell_size,
+            y: terrain_settings.cell_size,
         };
 
         let tile_colliders = build_terrain_colliders(&terrain_settings, &tile_storage);
@@ -292,10 +287,8 @@ fn update_terrain(
     for damage_event in tile_damage_events.iter() {
         if let Ok(mut tile_health) = damage_tiles_query.get_mut(damage_event.tile) {
             tile_health.0 = tile_health.0.saturating_sub(damage_event.damage);
-        } else {
-            if let Some(mut tile_entity) = commands.get_entity(damage_event.tile) {
-                tile_entity.insert(TileHealth(100u32.saturating_sub(damage_event.damage)));
-            }
+        } else if let Some(mut tile_entity) = commands.get_entity(damage_event.tile) {
+            tile_entity.insert(TileHealth(100u32.saturating_sub(damage_event.damage)));
         }
     }
 }
@@ -329,7 +322,7 @@ fn remove_destroyed_tiles(
     for (tile_entity, tile_health, tile_pos) in &tile_query {
         if tile_health.0 == 0 {
             commands.entity(tile_entity).despawn_recursive();
-            tile_storage.remove(&tile_pos);
+            tile_storage.remove(tile_pos);
             terrain_data.0[[tile_pos.x as usize, tile_pos.y as usize]] = 0;
             destroyed_tiles.send(TileDestroyedEvent {
                 entity: tile_entity,

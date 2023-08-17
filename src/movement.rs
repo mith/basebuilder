@@ -4,7 +4,6 @@ use bevy_rapier2d::prelude::{
     Collider, CollisionGroups, KinematicCharacterController, KinematicCharacterControllerOutput,
     QueryFilter, RapierContext,
 };
-use tracing::span;
 
 use crate::{
     climbable::ClimbableMap,
@@ -91,13 +90,12 @@ fn fall(
     for (climber_entity, mut controller, climber_transform) in &mut climber_query {
         for climbable_map in &climbable_map_query {
             let climber_pos = climber_transform.translation().xy();
-            let climber_tile_pos = terrain.global_to_tile_pos(climber_pos).expect(
-                format!(
+            let climber_tile_pos = terrain.global_to_tile_pos(climber_pos).unwrap_or_else(|| {
+                panic!(
                     "climber outside of terrain. Climber position: {:?}",
                     climber_pos
                 )
-                .as_str(),
-            );
+            });
 
             let shape_pos = climber_pos - Vec2::new(0., 6.);
             let shape_rot = 0.;
@@ -110,7 +108,7 @@ fn fall(
                 .intersection_with_shape(shape_pos, shape_rot, &shape, filter)
                 .is_some();
 
-            if !climbable_map.is_climbable(climber_tile_pos.into()) && !is_grounded {
+            if !climbable_map.is_climbable(climber_tile_pos) && !is_grounded {
                 commands.entity(climber_entity).insert(Falling);
                 controller.translation = Some(Vec2::new(0., -1.));
             } else {

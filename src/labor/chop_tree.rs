@@ -53,7 +53,7 @@ fn mark_trees(
 ) {
     if mouse_button_input.just_pressed(MouseButton::Left) {
         rapier_context.intersections_with_point(
-            Vec2::new(cursor_position.0.x as f32, cursor_position.0.y as f32),
+            Vec2::new(cursor_position.0.x, cursor_position.0.y),
             CollisionGroups::new(PICKER_COLLISION_GROUP, TREE_COLLISION_GROUP).into(),
             |hit_entity| {
                 let Ok((tree_entity, tree_transform)) =

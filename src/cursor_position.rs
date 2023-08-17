@@ -31,7 +31,7 @@ fn update_cursor_pos(
 ) {
     for (camera_transform, camera) in &camera_query {
         if let Some(cursor_position_in_world) =
-            cursor_position_in_world(&window.single(), camera_transform, camera)
+            cursor_position_in_world(window.single(), camera_transform, camera)
         {
             cursor_position.0 = cursor_position_in_world;
         }

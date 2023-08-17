@@ -46,7 +46,7 @@ fn update_climbable_map(
         if let Some(climbable_tile_pos) =
             terrain.global_to_tile_pos(added_climbable.translation().xy())
         {
-            climbable_map.mark_climbable(climbable_tile_pos.into());
+            climbable_map.mark_climbable(climbable_tile_pos);
         }
     }
 }

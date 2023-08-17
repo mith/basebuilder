@@ -17,7 +17,7 @@ use big_brain::{
     thinker::{ActionSpan, Actor, ScorerSpan, Thinker, ThinkerBuilder},
     BigBrainSet,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 use crate::{
     actions::fell::FellTarget,
@@ -65,7 +65,7 @@ fn jobs_available(
     assigned_job_query: Query<&AssignedJob>,
 ) {
     let any_jobs_available = unassigned_jobs_query.iter().next().is_some();
-    for (actor, mut score, span) in &mut actor_query {
+    for (actor, mut score, _span) in &mut actor_query {
         // Check if the actor is currently assigned a job or if there are unassigned jobs availabe
         let currently_assigned_job = assigned_job_query.get(actor.0).is_ok();
         if any_jobs_available || currently_assigned_job {
@@ -209,9 +209,9 @@ struct FellJobs(HashSet<FellJob>);
 fn feller_scorer(
     mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<Feller>>,
     fell_jobs_query: Query<&FellJob>,
-    global_transform_query: Query<&GlobalTransform>,
+    _global_transform_query: Query<&GlobalTransform>,
 ) {
-    for (actor, mut score, span) in &mut actor_query {
+    for (_actor, mut score, span) in &mut actor_query {
         let _guard = span.span().enter();
         // for now, just return a score of 1.0 when there is a job
         if fell_jobs_query.iter().next().is_some() {

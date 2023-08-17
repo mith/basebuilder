@@ -116,7 +116,7 @@ fn unhighlight_designated_tile(
         if let Ok(tile_pos) = tile_query.get(undesignation_tile_entity) {
             if let Some(hover_tile_entity) = tile_storage.get(tile_pos) {
                 commands.entity(hover_tile_entity).despawn_recursive();
-                tile_storage.remove(&tile_pos);
+                tile_storage.remove(tile_pos);
             }
         }
     }

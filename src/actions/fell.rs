@@ -83,8 +83,8 @@ fn fell(
                     .expect("Actor should have an assigned job with a job site");
 
                 if at_job_site(actor_position, job_site) {
-                    if let Some(fell_timer) = fell_timer_query.get_mut(actor.0).ok() {
-                        if let Some(tree_destroyed_event) = tree_destroyed_event_reader
+                    if let Ok(fell_timer) = fell_timer_query.get_mut(actor.0) {
+                        if let Some(_tree_destroyed_event) = tree_destroyed_event_reader
                             .iter()
                             .find(|event| event.tree == fell_timer.tree_entity)
                         {
@@ -133,15 +133,10 @@ fn felling_timer(
 
 fn at_job_site(actor_position: Vec2, job_site: &JobSite) -> bool {
     // if we're close to a job site, we're done
-    if job_site
+    job_site
         .0
         .iter()
         .any(|&site| site.distance(actor_position) < 6.)
-    {
-        true
-    } else {
-        false
-    }
 }
 
 #[derive(Component, Clone, Debug, ActionBuilder)]
@@ -178,7 +173,7 @@ fn move_to_tree(
                     .expect("Actor should have a FellJob assigned");
 
                 // if we're close to a job site, we're done
-                if at_job_site(actor_position, &job_site) {
+                if at_job_site(actor_position, job_site) {
                     info!("Arrived at tree");
                     let mut walker = walker_query
                         .get_mut(actor.0)
@@ -188,10 +183,10 @@ fn move_to_tree(
                     *action_state = ActionState::Success;
                 } else {
                     debug!("Moving to tree");
-                    let path = job_site.0.iter().find_map(|&site| {
-                        let path = pathfinding.find_path(actor_position, site);
-                        path
-                    });
+                    let path = job_site
+                        .0
+                        .iter()
+                        .find_map(|&site| pathfinding.find_path(actor_position, site));
                     if let Some(path) = path {
                         let mut walker = walker_query
                             .get_mut(actor.0)

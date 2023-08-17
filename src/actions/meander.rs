@@ -21,9 +21,9 @@ pub struct Meander;
 
 fn meander(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<Meander>>,
-    mut walker_query: Query<&mut Walker>,
+    _walker_query: Query<&mut Walker>,
 ) {
-    for (actor, mut action_state, span) in &mut action_query {
+    for (_actor, mut action_state, span) in &mut action_query {
         let _guard = span.span().enter();
 
         match *action_state {

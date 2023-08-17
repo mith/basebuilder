@@ -2,9 +2,9 @@ use bevy::{
     ecs::system::SystemParam,
     math::Vec3Swizzles,
     prelude::{
-        apply_deferred, info, Added, App, Commands, Component, DespawnRecursiveExt, Entity, Event,
-        EventReader, EventWriter, GlobalTransform, IntoSystemConfigs, Parent, Plugin, Query, Res,
-        SystemSet, Update, Vec2, With, Without,
+        info, Added, App, Commands, Component, DespawnRecursiveExt, Entity, Event, EventReader,
+        EventWriter, GlobalTransform, Parent, Plugin, Query, Res, SystemSet, Update, Vec2, With,
+        Without,
     },
     reflect::Reflect,
     time::{Time, Timer},
@@ -87,11 +87,9 @@ pub fn find_pathable_workers(
                     pathfinder.find_path(worker_transform.translation().xy(), *site_pos)
                 });
 
-                if let Some(path) = pathable_job_sites.min_by_key(|path| path.0.len()) {
-                    Some((*worker_entity, path))
-                } else {
-                    None
-                }
+                pathable_job_sites
+                    .min_by_key(|path| path.0.len())
+                    .map(|path| (*worker_entity, path))
             })
             .collect();
 
