@@ -1,69 +1,72 @@
 use bevy::{
     prelude::{
-        App, BuildChildren, Commands, Component, Entity, IntoSystemConfigs, Parent, Plugin, Query,
-        Update, With,
+        App, BuildChildren, Commands, Component, Entity, GlobalTransform, IntoSystemConfigs,
+        Plugin, PreUpdate, Query,
     },
     reflect::Reflect,
 };
-use tracing::info;
-
-use crate::actions::action::CompletedAction;
-
-use super::{
-    action::{register_action, ActionSet},
-    move_to::{travel_to_entity, TravelAction},
+use big_brain::{
+    prelude::{ActionBuilder, ActionState},
+    thinker::{ActionSpan, Actor},
+    BigBrainSet,
 };
+use tracing::{error, info};
 
 pub struct DeliverPlugin;
 
 impl Plugin for DeliverPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Deliver>()
-            .register_type::<Delivering>()
-            .add_systems(
-                Update,
-                (travel_to_entity::<Deliver>, complete_delivery).before(ActionSet),
-            );
-
-        register_action::<Deliver, Delivering>(app);
+            .add_systems(PreUpdate, deliver.in_set(BigBrainSet::Actions));
     }
 }
 
-#[derive(Component, Debug, Clone, Reflect)]
+#[derive(Component, Debug, Clone, Reflect, ActionBuilder)]
 pub struct Deliver {
     pub load: Entity,
     pub to: Entity,
 }
 
-impl TravelAction for Deliver {
-    type TravelingToTarget = TravelingToDeliverySite;
-    type AtTarget = AtDeliverySite;
-
-    fn target_entity(&self) -> Entity {
-        self.to
-    }
-}
-
-#[derive(Component, Default, Debug, Reflect)]
-pub struct Delivering;
-
-#[derive(Component, Default, Debug, Reflect)]
-pub struct TravelingToDeliverySite;
-
-#[derive(Component, Default, Debug, Reflect)]
-pub struct AtDeliverySite;
-
-fn complete_delivery(
+fn deliver(
     mut commands: Commands,
-    deliver_action_query: Query<(Entity, &Deliver, &Parent), With<AtDeliverySite>>,
+    mut deliver_query: Query<(&Actor, &mut Deliver, &mut ActionState, &ActionSpan)>,
+    global_transform_query: Query<&GlobalTransform>,
 ) {
-    for (deliver_action_entity, delivery, deliverer_entity) in &deliver_action_query {
-        commands.entity(delivery.to).add_child(delivery.load);
+    for (actor, mut deliver, mut action_state, span) in &mut deliver_query {
+        let _guard = span.span().enter();
 
-        commands
-            .entity(deliver_action_entity)
-            .insert(CompletedAction);
+        match *action_state {
+            ActionState::Requested => {
+                info!("Starting delivery");
+                *action_state = ActionState::Executing;
+            }
+            ActionState::Executing => {
+                info!("Delivering");
+                let actor_position = global_transform_query
+                    .get(actor.0)
+                    .unwrap()
+                    .translation()
+                    .truncate();
+                let destination_position = global_transform_query
+                    .get(deliver.to)
+                    .unwrap()
+                    .translation()
+                    .truncate();
 
-        info!(worker=?deliverer_entity, delivery=?delivery, "Delivery complete");
+                if actor_position.distance(destination_position) < 16. {
+                    info!("Delivered");
+                    commands.entity(deliver.to).add_child(deliver.load);
+                    *action_state = ActionState::Success;
+                } else {
+                    error!("Too far away to deliver");
+                    *action_state = ActionState::Failure;
+                }
+            }
+            ActionState::Cancelled => {
+                info!("Cancelled delivery");
+                *action_state = ActionState::Failure;
+            }
+            _ => {}
+        }
     }
 }

@@ -4,6 +4,7 @@ use bevy::{
     utils::HashMap,
 };
 use bevy_common_assets::ron::RonAssetPlugin;
+use terrain_gen::TerrainGeneratorSettings;
 
 use crate::material::MaterialProperties;
 
@@ -55,6 +56,18 @@ pub struct TerrainSettings {
     pub cell_size: f32,
     pub ore_incidences: HashMap<u16, f32>,
     pub seed: u32,
+}
+
+impl From<TerrainSettings> for TerrainGeneratorSettings {
+    fn from(settings: TerrainSettings) -> Self {
+        Self {
+            width: settings.width,
+            height: settings.height,
+            cell_size: settings.cell_size,
+            ore_incidences: settings.ore_incidences,
+            seed: settings.seed,
+        }
+    }
 }
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]

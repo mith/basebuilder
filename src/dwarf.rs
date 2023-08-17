@@ -5,11 +5,18 @@ use bevy_rapier2d::{
         CharacterAutostep, Collider, CollisionGroups, Group, QueryFilter, RapierContext, RigidBody,
     },
 };
+use big_brain::{
+    prelude::FirstToScore,
+    thinker::{Thinker, ThinkerBuilder},
+};
 use rand::{seq::IteratorRandom, SeedableRng};
 use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
-    ai_controller::AiControlled,
+    actions::{
+        meander::Meander,
+        work::{build_worker_thinker, JobsAvailable},
+    },
     labor::job::Worker,
     main_state::MainState,
     movement::{Climber, Jumper, Walker},
@@ -100,10 +107,19 @@ fn spawn_dwarf(
             }),
             ..default()
         },
-        AiControlled,
         Worker,
+        build_dwarf_thinker(),
         Walker::default(),
         Jumper::default(),
         Climber,
     ));
+}
+
+fn build_dwarf_thinker() -> ThinkerBuilder {
+    info!("Building Dwarf Thinker");
+    Thinker::build()
+        .label("Dwarf")
+        .picker(FirstToScore::new(0.8))
+        .when(JobsAvailable, build_worker_thinker())
+        .otherwise(Meander)
 }

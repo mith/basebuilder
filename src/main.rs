@@ -5,7 +5,7 @@ use bevy_ecs_tilemap::TilemapPlugin;
 use bevy_egui::EguiPlugin;
 use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 
-use ai_controller::AiControllerPlugin;
+use big_brain::BigBrainPlugin;
 use climbable::ClimbablePlugin;
 use cursor_position::CursorPositionPlugin;
 use debug::DebugPlugin;
@@ -32,7 +32,6 @@ use tree::TreePlugin;
 use world_generation::WorldGenerationPlugin;
 
 mod actions;
-mod ai_controller;
 mod climbable;
 mod crafting;
 mod cursor_position;
@@ -59,6 +58,7 @@ mod terrain;
 mod terrain_settings;
 mod toolbar;
 mod tree;
+mod util;
 mod world_generation;
 
 fn main() {
@@ -82,6 +82,7 @@ fn main() {
         TilemapPlugin,
         RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
         EguiPlugin,
+        BigBrainPlugin::new(PreUpdate),
     ));
 
     // Add crate plugins
@@ -97,7 +98,6 @@ fn main() {
         TerrainPlugin,
         WorldGenerationPlugin,
         HoveredTilePlugin,
-        AiControllerPlugin,
     ));
 
     app.add_plugins((

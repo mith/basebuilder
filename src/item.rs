@@ -8,7 +8,7 @@ pub struct ItemPlugin;
 
 impl Plugin for ItemPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(RonAssetPlugin::<Items>::new(&["items.ron"]))
+        app.add_plugins(RonAssetPlugin::<Items>::new(&["items.ron"]))
             .add_asset::<Items>()
             .add_state::<ItemsState>()
             .add_systems(OnEnter(ItemsState::Loading), load_items)

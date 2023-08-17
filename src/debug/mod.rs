@@ -1,4 +1,5 @@
 mod pathfinding;
+pub mod terrain;
 
 use bevy::prelude::*;
 #[cfg(feature = "inspector")]
@@ -7,7 +8,10 @@ use bevy_rapier2d::render::{DebugRenderContext, RapierDebugRenderPlugin};
 
 use crate::pan_zoom_camera2d::{PanZoomCamera2d, PanZoomCamera2dBundle};
 
-use self::pathfinding::{PathfindingDebugPlugin, PathfindingDebugState};
+use self::{
+    pathfinding::{PathfindingDebugPlugin, PathfindingDebugState},
+    terrain::TerrainDebugPlugin,
+};
 
 pub struct DebugPlugin;
 
@@ -30,7 +34,7 @@ impl Plugin for DebugPlugin {
             )
                 .in_set(DebugSet),
         )
-        .add_plugins(PathfindingDebugPlugin);
+        .add_plugins((PathfindingDebugPlugin, TerrainDebugPlugin));
     }
 }
 
@@ -47,8 +51,10 @@ fn toggle_inspector(
 ) {
     if keyboard_input.just_pressed(KeyCode::F3) {
         if maybe_inspector.is_some() {
+            info!("Disabling inspector");
             commands.remove_resource::<Inspector>();
         } else {
+            info!("Enabling inspector");
             commands.insert_resource(Inspector);
         }
     }
@@ -59,6 +65,7 @@ fn toggle_physics_debug(
     keyboard_input: Res<Input<KeyCode>>,
 ) {
     if keyboard_input.just_pressed(KeyCode::F2) {
+        info!("Toggling physics debug");
         debug_render.enabled = !debug_render.enabled;
     }
 }
@@ -98,9 +105,11 @@ fn toggle_pathfinding_debug(
     if keyboard_input.just_pressed(KeyCode::F4) {
         match current_state.get() {
             PathfindingDebugState::Enabled => {
+                info!("Disabling pathfinding debug");
                 next_state.set(PathfindingDebugState::Disabled);
             }
             PathfindingDebugState::Disabled => {
+                info!("Enabling pathfinding debug");
                 next_state.set(PathfindingDebugState::Enabled);
             }
         }

@@ -1,0 +1,16 @@
+[package]
+name = "terrain_gen"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ahash = "0.8.3"
+fast_poisson = "1.0.0"
+glam = "0.24.1"
+hashbrown = "0.14.0"
+ndarray = "0.15.6"
+noise = "0.8.2"
+rand = "0.8.5"
+rand_xoshiro = "0.6.0"

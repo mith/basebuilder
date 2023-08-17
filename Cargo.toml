@@ -1,3 +1,5 @@
+[workspace]
+
 [package]
 name = "basebuilder"
 version = "0.1.0"
@@ -14,19 +16,20 @@ lto = "fat"
 opt-level = "z"
 
 # Enable max optimizations for dependencies, but not for our code:
-[profile.dev.package."*"]
-opt-level = 3
+# [profile.dev.package."*"]
+# opt-level = 3
 
 [dependencies]
+terrain_gen = { path = "terrain_gen" }
+planner = { path = "planner" }
+
 bevy-inspector-egui = { version = "0.19.0", optional = true, default-features = false }
 ndarray = "0.15.6"
 bevy_ecs_tilemap = "0.11.0"
 bevy_rapier2d = { version = "0.22.0", features = ["wasm-bindgen"] }
 bevy_common_assets = { version = "0.7.0", features = ["ron"] }
 serde = "1.0.175"
-noise = "0.8.2"
 rand = "0.8.5"
-fast_poisson = "0.5.2"
 rand_xoshiro = "0.6.0"
 futures-lite = { version = "1.12.0", optional = true }
 egui = "0.22.0"
@@ -74,3 +77,4 @@ features = [
 [patch.crates-io]
 # bevy_ecs_tilemap = { git = 'https://github.com/StarArawn/bevy_ecs_tilemap', branch = "main" }
 bevy-inspector-egui = { git = 'https://github.com/jakobhellermann/bevy-inspector-egui' }
+big-brain ={ path = '/home/simon/src/big-brain' }

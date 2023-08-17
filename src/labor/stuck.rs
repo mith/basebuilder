@@ -6,8 +6,8 @@ use bevy::{
 use bevy_rapier2d::prelude::KinematicCharacterControllerOutput;
 
 use crate::{
-    ai_controller::Path,
     labor::job::{AssignedJob, AssignedWorker, BlacklistedWorkers, Job, Worker},
+    pathfinding::Path,
 };
 
 pub struct StuckPlugin;

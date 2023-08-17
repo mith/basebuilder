@@ -1,9 +1,10 @@
-use bevy::{math::Vec3Swizzles, prelude::*};
+use bevy::{ecs::system::SystemParam, math::Vec3Swizzles, prelude::*};
 
 use bevy_rapier2d::prelude::{
     Collider, CollisionGroups, KinematicCharacterController, KinematicCharacterControllerOutput,
     QueryFilter, RapierContext,
 };
+use tracing::span;
 
 use crate::{
     climbable::ClimbableMap,
@@ -15,18 +16,21 @@ pub struct MovementPlugin;
 
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (walk, fall).in_set(MovementSet));
+        app.add_systems(Update, (walk, fall).in_set(MovementSet))
+            .register_type::<Walker>()
+            .register_type::<Jumper>();
     }
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 pub struct MovementSet;
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Reflect)]
 pub struct Walker {
     pub move_direction: Option<Vec2>,
 }
-#[derive(Component, Default)]
+
+#[derive(Component, Default, Reflect)]
 pub struct Jumper {
     pub jump_timer: Option<Timer>,
     pub jump: bool,
@@ -86,11 +90,16 @@ fn fall(
 ) {
     for (climber_entity, mut controller, climber_transform) in &mut climber_query {
         for climbable_map in &climbable_map_query {
-            let climber_tile_pos = terrain
-                .global_to_tile_pos(climber_transform.translation().xy())
-                .unwrap();
+            let climber_pos = climber_transform.translation().xy();
+            let climber_tile_pos = terrain.global_to_tile_pos(climber_pos).expect(
+                format!(
+                    "climber outside of terrain. Climber position: {:?}",
+                    climber_pos
+                )
+                .as_str(),
+            );
 
-            let shape_pos = climber_transform.translation().xy() - Vec2::new(0., 6.);
+            let shape_pos = climber_pos - Vec2::new(0., 6.);
             let shape_rot = 0.;
             let shape = Collider::cuboid(6., 0.2);
             let filter = QueryFilter::default().groups(CollisionGroups::new(

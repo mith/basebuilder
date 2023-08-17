@@ -58,8 +58,8 @@ fn setup_designation_layer(
     let storage = TileStorage::empty(tilemap_size);
 
     let map_transform = Transform::from_translation(Vec3::new(
-        -(config.width as f32 * config.cell_size / 2.),
-        -(config.height as f32 * config.cell_size / 2.),
+        -(config.width as f32 * config.cell_size / 2.) + 0.5 * config.cell_size,
+        -(config.height as f32 * config.cell_size / 2.) + 0.5 * config.cell_size,
         DESIGNATION_LAYER_Z,
     ));
     commands.spawn((

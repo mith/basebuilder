@@ -3,11 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bevy::{
-    prelude::{Component, IVec2},
-    utils::{AHasher, RandomState},
-};
+use ahash::{AHasher, RandomState};
 use fast_poisson::Poisson2D;
+use glam::IVec2;
+use hashbrown::HashMap;
 use ndarray::Array2;
 use noise::{NoiseFn, Seedable, SuperSimplex, TranslatePoint, Turbulence};
 use rand::{
@@ -16,34 +15,37 @@ use rand::{
 };
 use rand_xoshiro::Xoshiro256StarStar;
 
-use crate::terrain_settings::TerrainSettings;
+#[derive(Clone, Debug)]
+pub struct TerrainGeneratorSettings {
+    pub width: u32,
+    pub height: u32,
+    pub cell_size: f32,
+    pub ore_incidences: HashMap<u16, f32>,
+    pub seed: u32,
+}
+pub type GeneratorFunction = Arc<Mutex<Box<dyn NoiseFn<f64, 2> + Send + Sync>>>;
 
-type GeneratorFunction = Arc<Mutex<Box<dyn NoiseFn<f64, 2> + Send + Sync>>>;
+pub fn create_terrain_generator_function(
+    generator_settings: TerrainGeneratorSettings,
+) -> GeneratorFunction {
+    let seed = generator_settings.seed;
 
-#[derive(Component)]
-pub struct TerrainGenerator(pub GeneratorFunction);
+    // let simplex = SuperSimplex::new(seed);
+    // let scale_point = ScalePoint::new(simplex)
+    //     .set_scale(0.05); //.set_x_scale(0.);
+    let plane = PlaneNoise { height: 0. };
+    let turbulence = Turbulence::<_, SuperSimplex>::new(plane)
+        .set_seed(seed)
+        .set_frequency(0.003)
+        .set_power(10.0);
 
-impl TerrainGenerator {
-    pub fn new(terrain_settings: TerrainSettings) -> Self {
-        let seed = terrain_settings.seed;
+    let translate = TranslatePoint::new(turbulence)
+        // .set_x_translation(terrain_settings.width as f64 / 2.)
+        .set_y_translation(-(generator_settings.height as f64) / 2.);
 
-        // let simplex = SuperSimplex::new(seed);
-        // let scale_point = ScalePoint::new(simplex)
-        //     .set_scale(0.05); //.set_x_scale(0.);
-        let plane = PlaneNoise { height: 0. };
-        let turbulence = Turbulence::<_, SuperSimplex>::new(plane)
-            .set_seed(seed)
-            .set_frequency(0.003)
-            .set_power(10.0);
-
-        let translate = TranslatePoint::new(turbulence)
-            // .set_x_translation(terrain_settings.width as f64 / 2.)
-            .set_y_translation(-(terrain_settings.height as f64) / 2.);
-
-        let terrain_function: Arc<Mutex<Box<dyn NoiseFn<f64, 2> + Send + Sync + 'static>>> =
-            Arc::new(Mutex::new(Box::new(translate)));
-        TerrainGenerator(terrain_function)
-    }
+    let terrain_function: Arc<Mutex<Box<dyn NoiseFn<f64, 2> + Send + Sync + 'static>>> =
+        Arc::new(Mutex::new(Box::new(translate)));
+    terrain_function
 }
 
 #[derive(Debug, Default)]
@@ -82,7 +84,7 @@ impl NoiseFn<f64, 2> for PlaneNoise {
 pub fn generate_terrain(
     region_location: IVec2,
     generator: GeneratorFunction,
-    terrain_settings: TerrainSettings,
+    terrain_settings: TerrainGeneratorSettings,
 ) -> Array2<u16> {
     let mut terrain = Array2::from_elem(
         (

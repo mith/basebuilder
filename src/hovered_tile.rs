@@ -1,7 +1,4 @@
-use bevy::{
-    math::{Vec2Swizzles, Vec3Swizzles},
-    prelude::*,
-};
+use bevy::{math::Vec2Swizzles, prelude::*};
 use bevy_ecs_tilemap::{
     prelude::*,
     tiles::{TileColor, TilePos, TileStorage},
@@ -63,8 +60,8 @@ fn setup_hovered_layer(
     let storage = TileStorage::empty(tilemap_size);
 
     let map_transform = Transform::from_translation(Vec3::new(
-        -(config.width as f32 * config.cell_size / 2.),
-        -(config.height as f32 * config.cell_size / 2.),
+        -(config.width as f32 * config.cell_size / 2.) + 0.5 * config.cell_size,
+        -(config.height as f32 * config.cell_size / 2.) + 0.5 * config.cell_size,
         1.0,
     ));
     commands.spawn((
@@ -120,13 +117,16 @@ fn highlight_hovered_tile(
     for (tilemap_entity, mut tile_storage) in &mut tilemap_query {
         for tile_pos in &mut tile_query {
             let tile_entity = commands
-                .spawn(TileBundle {
-                    position: *tile_pos,
-                    tilemap_id: TilemapId(tilemap_entity),
-                    texture_index: TileTextureIndex(0),
-                    color: TileColor(HIGHLIGHT_COLOR),
-                    ..default()
-                })
+                .spawn((
+                    Name::new("Hovered tile"),
+                    TileBundle {
+                        position: *tile_pos,
+                        tilemap_id: TilemapId(tilemap_entity),
+                        texture_index: TileTextureIndex(0),
+                        color: TileColor(HIGHLIGHT_COLOR),
+                        ..default()
+                    },
+                ))
                 .id();
             tile_storage.set(tile_pos, tile_entity);
         }

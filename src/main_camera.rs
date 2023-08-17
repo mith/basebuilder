@@ -11,5 +11,8 @@ impl Plugin for MainCameraPlugin {
 }
 
 fn spawn_camera(mut commands: Commands) {
-    commands.spawn(PanZoomCamera2dBundle::default());
+    commands.spawn(PanZoomCamera2dBundle {
+        camera: Camera2dBundle { ..default() },
+        ..default()
+    });
 }

@@ -1,6 +1,6 @@
 (
-    width: 50,
-    height: 20,
+    width: 51,
+    height: 21,
     cell_size: 16.,
     ore_incidences: {
         "Coal": 2.,

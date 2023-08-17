@@ -3,14 +3,14 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
-    actions::{action::Action, fell::Fell},
+    actions::work::FellJob,
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
     labor::job::{all_workers_eligible, Complete, Job, JobSite},
     tree::{Tree, TreeDestroyedEvent, TREE_COLLISION_GROUP},
 };
 
-use super::job::{register_job, AssignedWorker, JobAssignmentSet};
+use super::job::{AssignedWorker, JobAssignmentSet};
 
 pub struct ChopTreePlugin;
 
@@ -24,13 +24,10 @@ impl Plugin for ChopTreePlugin {
                 (
                     mark_trees.run_if(state_exists_and_equals(FellingToolState::Designating)),
                     all_workers_eligible::<FellingJob>,
-                    start_felling_job,
                     finish_felling_job,
                 )
                     .before(JobAssignmentSet),
             );
-
-        register_job::<FellingJob, Feller>(app);
     }
 }
 
@@ -70,47 +67,20 @@ fn mark_trees(
                 };
                 let tree_translation = tree_transform.translation().xy();
                 commands.entity(tree_entity).insert(Designated);
+                let job_site = JobSite(vec![
+                            Vec2::new(tree_translation.x - 16., tree_translation.y),
+                            Vec2::new(tree_translation.x + 16., tree_translation.y),
+                        ]);
                 let job_entity = commands
                     .spawn((
                         Job,
-                        FellingJob(tree_entity),
-                        JobSite(vec![
-                            Vec2::new(tree_translation.x - 16., tree_translation.y),
-                            Vec2::new(tree_translation.x + 16., tree_translation.y),
-                        ]),
+                        FellJob { tree: tree_entity },
+                        job_site.clone(),
                     ))
                     .id();
-                info!(job = ?job_entity, tree=?tree_entity, "Marked tree for felling");
+                info!(job = ?job_entity, tree=?tree_entity, job_site=?job_site, "Marked tree for felling");
                 false
             },
-        );
-    }
-}
-
-#[derive(Component, Default, Debug)]
-struct Feller;
-
-#[derive(Component, Debug, Clone, Reflect)]
-struct AwaitingFelling(Entity);
-
-fn start_felling_job(
-    mut commands: Commands,
-    felling_job_query: Query<
-        (Entity, &FellingJob, &AssignedWorker),
-        (Without<AwaitingFelling>, Without<Complete>),
-    >,
-) {
-    for (felling_job_entity, FellingJob(tree_entity), AssignedWorker(feller_entity)) in
-        &mut felling_job_query.iter()
-    {
-        let fell_action = commands.spawn((Action, Fell(*tree_entity))).id();
-        commands.entity(*feller_entity).add_child(fell_action);
-        commands
-            .entity(felling_job_entity)
-            .insert(AwaitingFelling(fell_action));
-        info!(
-            feller=?feller_entity, felling_job=?felling_job_entity, fell_action=?fell_action, tree=?tree_entity,
-            "Spawning fell action for felling job"
         );
     }
 }
@@ -126,24 +96,24 @@ pub struct FellingCompleteEvent {
 fn finish_felling_job(
     mut commands: Commands,
     mut tree_destroyed_event_reader: EventReader<TreeDestroyedEvent>,
-    felling_job_query: Query<(Entity, &FellingJob, &AssignedWorker, Option<&Parent>)>,
+    felling_job_query: Query<(Entity, &FellJob, &AssignedWorker, Option<&Parent>)>,
     mut felling_complete_event_writer: EventWriter<FellingCompleteEvent>,
 ) {
     for tree_destroyed_event in tree_destroyed_event_reader.iter() {
-        if let Some((felling_job_entity, felling_job, AssignedWorker(feller_entity), parent)) =
+        if let Some((fell_job_entity, fell_job, AssignedWorker(feller_entity), parent)) =
             felling_job_query
                 .iter()
-                .find(|(_, felling_job, _, _)| felling_job.0 == tree_destroyed_event.tree)
+                .find(|(_, fell_job, _, _)| fell_job.tree == tree_destroyed_event.tree)
         {
-            debug_assert!(tree_destroyed_event.tree == felling_job.0, "Tree mismatch");
+            debug_assert!(tree_destroyed_event.tree == fell_job.tree, "Tree mismatch");
 
             // Mark the job as complete
-            commands.entity(felling_job_entity).insert(Complete);
+            commands.entity(fell_job_entity).insert(Complete);
 
-            info!(feller=?feller_entity, felling_job=?felling_job_entity, "Felling complete");
+            info!(feller=?feller_entity, felling_job=?fell_job_entity, "Felling complete");
 
             felling_complete_event_writer.send(FellingCompleteEvent {
-                job: felling_job_entity,
+                job: fell_job_entity,
                 parent_job: parent.map(|p| p.get()),
                 worker: *feller_entity,
                 tree: tree_destroyed_event.tree,

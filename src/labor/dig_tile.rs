@@ -2,10 +2,6 @@ use bevy::prelude::*;
 use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::{
-    actions::{
-        action::{Action, ActionCompletedEvent},
-        dig::Dig,
-    },
     designation_layer::Designated,
     hovered_tile::HoveredTile,
     labor::job::{all_workers_eligible, Job, JobSite},
@@ -100,20 +96,7 @@ fn schedule_dig_action(
 ) {
     for (job_entity, DigJob(tile_entity), AssignedWorker(worker_entity), job_site) in
         &mut dig_job_query.iter()
-    {
-        let dig_action = commands
-            .spawn((Action, Dig(*tile_entity), job_site.clone()))
-            .id();
-
-        commands.entity(job_entity).insert(AwaitingDig(dig_action));
-
-        commands.entity(*worker_entity).add_child(dig_action);
-
-        info!(
-            worker = ?worker_entity, job = ?job_entity, action = ?dig_action, tile = ?tile_entity,
-            "Scheduled dig action"
-        );
-    }
+    {}
 }
 
 #[derive(Event)]
@@ -133,53 +116,6 @@ fn finish_digjob(
         &AssignedWorker,
         Option<&Parent>,
     )>,
-    mut digging_complete_event_reader: EventReader<ActionCompletedEvent<Dig>>,
     mut digging_complete_event_writer: EventWriter<DigJobCompleteEvent>,
 ) {
-    for ActionCompletedEvent::<Dig> {
-        action_entity: completed_action_entity,
-        performer_entity,
-        action: Dig(tile_entity),
-    } in digging_complete_event_reader.iter()
-    {
-        if let Some((
-            dig_job_entity,
-            DigJob(designated_tile_entity),
-            _,
-            AssignedWorker(worker_entity),
-            parent,
-        )) = dig_job_query
-            .iter()
-            .find(|(_, _, AwaitingDig(awaited_action_entity), _, _)| {
-                awaited_action_entity == completed_action_entity
-            })
-        {
-            debug_assert!(
-                performer_entity == worker_entity,
-                "Dig action was performed by a different entity than the one assigned to the job"
-            );
-
-            debug_assert!(
-                tile_entity == designated_tile_entity,
-                "Dig action was performed on a different tile than the one assigned to the job"
-            );
-
-            commands
-                .entity(dig_job_entity)
-                .remove::<AwaitingDig>()
-                .insert(Complete);
-
-            info!(
-                worker = ?worker_entity, job = ?dig_job_entity, tile = ?tile_entity,
-                "Dig job completed"
-            );
-
-            digging_complete_event_writer.send(DigJobCompleteEvent {
-                job: dig_job_entity,
-                parent_job: parent.map(|p| p.get()),
-                worker: *worker_entity,
-                tile: *tile_entity,
-            });
-        }
-    }
 }

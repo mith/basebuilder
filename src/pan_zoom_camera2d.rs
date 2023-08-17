@@ -67,7 +67,7 @@ fn camera_zoom(
                 - Vec2::new(primary_window.width() / 2., primary_window.height() / 2.);
 
             let scaled_move = from_center * event.y.clamp(-1., 1.) * zoom_change.abs();
-            transform.translation += Vec3::new(scaled_move.x, scaled_move.y, 0.);
+            transform.translation += Vec3::new(scaled_move.x, -scaled_move.y, 0.);
         }
     }
 }
@@ -114,7 +114,7 @@ fn drag_camera(
         let diff = current_cursor_position - drag_start.cursor_position;
         let z = transform.translation.z;
         transform.translation =
-            drag_start.camera_position - Vec3::new(diff.x, diff.y, 0.) * ortho.scale;
+            drag_start.camera_position - Vec3::new(diff.x, -diff.y, 0.) * ortho.scale;
         transform.translation.z = z;
     }
 }

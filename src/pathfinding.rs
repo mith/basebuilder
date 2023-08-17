@@ -19,7 +19,7 @@ pub struct Pathfinding<'w, 's> {
 }
 
 impl<'w, 's> Pathfinding<'w, 's> {
-    pub fn find_path(&self, start_pos: Vec2, target_pos: Vec2) -> Option<Vec<UVec2>> {
+    pub fn find_path(&self, start_pos: Vec2, target_pos: Vec2) -> Option<Path> {
         let Some(start_tile_pos) = self.terrain.global_to_tile_pos(start_pos) else {
             return None;
         };
@@ -34,21 +34,20 @@ impl<'w, 's> Pathfinding<'w, 's> {
             start_tile_pos.into(),
             target_tile_pos.into(),
         );
-        if path.is_empty() {
-            None
-        } else {
-            Some(path)
-        }
+        path
     }
 }
+
+#[derive(Component, Reflect, Clone)]
+pub struct Path(pub Vec<UVec2>);
 
 pub fn find_path(
     terrain_data: &TerrainData,
     climbable_map: Option<&ClimbableMap>,
     start_tile_pos: UVec2,
     target_tile_pos: UVec2,
-) -> Vec<UVec2> {
-    astar(
+) -> Option<Path> {
+    let path = astar(
         &start_tile_pos,
         |p| {
             let mut successors = Vec::new();
@@ -73,7 +72,7 @@ pub fn find_path(
                     direction,
                     SquareDirection::SouthWest | SquareDirection::SouthEast
                 ) {
-                    if can_stand(terrain_data, climbable_map, target_tile_pos)
+                    if can_stand(terrain_data, target_tile_pos)
                         && can_move_to(terrain_data, climbable_map, tile_pos, *direction)
                     {
                         successors.push((target_tile_pos.into(), 1));
@@ -95,7 +94,13 @@ pub fn find_path(
         |p| *p == target_tile_pos,
     )
     .unwrap_or_default()
-    .0
+    .0;
+
+    if path.is_empty() {
+        None
+    } else {
+        Some(Path(path))
+    }
 }
 
 pub fn can_stand_or_climb(
@@ -113,7 +118,7 @@ pub fn can_stand_or_climb(
 
     let can_climb_in_tile = can_climb(climbable_map, tile_pos);
 
-    let can_stand_in_tile = can_stand(terrain_data, climbable_map, tile_pos);
+    let can_stand_in_tile = can_stand(terrain_data, tile_pos);
 
     can_climb_in_tile || can_stand_in_tile
 }
@@ -128,12 +133,15 @@ pub fn can_climb(climbable_map: Option<&ClimbableMap>, tile_pos: TilePos) -> boo
     false
 }
 
-pub fn can_stand(
-    terrain_data: &TerrainData,
-    climbable_map: Option<&ClimbableMap>,
-    tile_pos: TilePos,
-) -> bool {
+pub fn can_stand(terrain_data: &TerrainData, tile_pos: TilePos) -> bool {
     let map_size: TilemapSize = terrain_data.map_size().into();
+    if terrain_data
+        .get_tile(tile_pos.into())
+        .map_or(false, |tile| tile != 0)
+    {
+        // Tile is solid
+        return false;
+    }
     let Some(south_tile_pos) = tile_pos.square_offset(&SquareDirection::South, &map_size) else {
         // Tileposition is outside of the map
         return false;
@@ -141,8 +149,7 @@ pub fn can_stand(
     let south_tile_is_solid = terrain_data
         .get_tile(south_tile_pos.into())
         .map_or(false, |tile| tile != 0);
-    let south_tile_is_climbable = can_climb(climbable_map, south_tile_pos);
-    return south_tile_is_solid || south_tile_is_climbable;
+    return south_tile_is_solid;
 }
 
 pub fn can_move_to(

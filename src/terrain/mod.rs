@@ -1,4 +1,3 @@
-mod generate;
 mod terrain_params;
 
 use std::sync::Arc;
@@ -20,7 +19,10 @@ use crate::{
     main_state::MainState, material::MaterialProperties, terrain_settings::TerrainSettings,
 };
 
-use self::generate::{generate_terrain, TerrainGenerator};
+use terrain_gen::{
+    create_terrain_generator_function, generate_terrain, GeneratorFunction,
+    TerrainGeneratorSettings,
+};
 
 pub use self::terrain_params::TerrainParams;
 pub struct TerrainPlugin;
@@ -89,6 +91,14 @@ impl TerrainData {
         UVec2::new(shape[0] as u32, shape[1] as u32)
     }
 }
+#[derive(Component)]
+pub struct TerrainGenerator(pub GeneratorFunction);
+
+impl TerrainGenerator {
+    pub fn new(terrain_settings: TerrainSettings) -> Self {
+        Self(create_terrain_generator_function(terrain_settings.into()))
+    }
+}
 
 #[cfg(feature = "async")]
 #[derive(Component)]
@@ -114,7 +124,7 @@ fn setup_terrain(
         #[cfg(feature = "async")]
         {
             info!("Generating terrain asynchronously");
-            let task = generate_terrain_async(generator, terrain_settings.clone());
+            let task = generate_terrain_async(generator, terrain_settings.clone().into());
             commands.spawn(GenerateTerrain(task));
         }
 
@@ -123,7 +133,7 @@ fn setup_terrain(
             info!("Generating terrain synchronously");
             let generator = Arc::clone(&generator.0);
             let terrain_data =
-                generate_terrain(IVec2::new(0, 0), generator, terrain_settings.clone());
+                generate_terrain(IVec2::new(0, 0), generator, terrain_settings.clone().into());
             commands
                 .entity(terrain_entity)
                 .insert(TerrainData(terrain_data));
@@ -134,8 +144,10 @@ fn setup_terrain(
             Name::new("Background"),
             MaterialMesh2dBundle {
                 transform: Transform::from_xyz(
-                    -terrain_settings.cell_size as f32 / 2.,
-                    -terrain_settings.cell_size as f32 / 2.,
+                    -terrain_settings.cell_size as f32 / 2.
+                        + 0.5 * terrain_settings.cell_size as f32,
+                    -terrain_settings.cell_size as f32 / 2.
+                        + 0.5 * terrain_settings.cell_size as f32,
                     TERRAIN_LAYER_Z,
                 ),
                 material: materials.add(Color::TEAL.into()),
@@ -199,8 +211,10 @@ fn spawn_tilemap(
         let mut tile_storage = TileStorage::empty(tilemap_size);
 
         let terrain_transform = Transform::from_translation(Vec3::new(
-            -(terrain_settings.width as f32) * terrain_settings.cell_size as f32 / 2.0,
-            -(terrain_settings.height as f32) * terrain_settings.cell_size as f32 / 2.0,
+            -(terrain_settings.width as f32 * terrain_settings.cell_size) / 2.0
+                + 0.5 * terrain_settings.cell_size as f32,
+            -(terrain_settings.height as f32 * terrain_settings.cell_size) / 2.0
+                + 0.5 * terrain_settings.cell_size as f32,
             TERRAIN_LAYER_Z,
         ));
 
@@ -213,6 +227,7 @@ fn spawn_tilemap(
 
                 let tile_entity = commands
                     .spawn((
+                        Name::new("TerrainTile"),
                         TileBundle {
                             position: tile_pos,
                             tilemap_id: TilemapId(terrain_entity),
@@ -239,6 +254,7 @@ fn spawn_tilemap(
         let tile_colliders = build_terrain_colliders(&terrain_settings, &tile_storage);
 
         commands.entity(terrain_entity).insert((
+            Name::new("Terrain"),
             TilemapBundle {
                 grid_size: tile_size.into(),
                 map_type: TilemapType::Square,

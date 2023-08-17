@@ -85,10 +85,6 @@ fn spawn_tree(
             Visibility::default(),
             ComputedVisibility::default(),
             RigidBody::Fixed,
-            CollisionGroups::new(
-                TREE_COLLISION_GROUP,
-                TERRAIN_COLLISION_GROUP | PICKER_COLLISION_GROUP,
-            ),
             Health(100),
         ))
         .with_children(|parent| {
@@ -99,6 +95,10 @@ fn spawn_tree(
                     mesh: meshes.add(Mesh::from(shape::Quad::new(tree_size))).into(),
                     ..default()
                 },
+                CollisionGroups::new(
+                    TREE_COLLISION_GROUP,
+                    TERRAIN_COLLISION_GROUP | PICKER_COLLISION_GROUP,
+                ),
                 Collider::cuboid(tree_size.x / 2., tree_size.y / 2.),
             ));
         });

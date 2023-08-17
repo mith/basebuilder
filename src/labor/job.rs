@@ -12,7 +12,7 @@ use bevy::{
 };
 use tracing::{debug, instrument, warn};
 
-use crate::{ai_controller::Path, pathfinding::Pathfinding};
+use crate::{pathfinding::Path, pathfinding::Pathfinding};
 
 pub struct JobPlugin;
 
@@ -24,14 +24,14 @@ impl Plugin for JobPlugin {
             .register_type::<BlacklistedWorkers>()
             .register_type::<PathableWorkers>()
             .register_type::<EligibleWorkers>()
-            .register_type::<JobSite>()
-            .add_systems(Update, (find_pathable_workers, blacklist_timer))
-            .add_systems(
-                Update,
-                (apply_deferred, assign_jobs, apply_deferred)
-                    .chain()
-                    .in_set(JobAssignmentSet),
-            );
+            .register_type::<JobSite>();
+        // .add_systems(Update, (find_pathable_workers, blacklist_timer))
+        // .add_systems(
+        //     Update,
+        //     (apply_deferred, assign_jobs, apply_deferred)
+        //         .chain()
+        //         .in_set(JobAssignmentSet),
+        // );
     }
 }
 
@@ -48,7 +48,7 @@ pub struct Worker;
 #[derive(Component, Reflect)]
 pub struct AssignedJob(pub Entity);
 
-/// A worker assigned to a job
+// A worker assigned to a job
 #[derive(Component, Reflect)]
 pub struct AssignedWorker(pub Entity);
 
@@ -87,8 +87,8 @@ pub fn find_pathable_workers(
                     pathfinder.find_path(worker_transform.translation().xy(), *site_pos)
                 });
 
-                if let Some(path) = pathable_job_sites.min_by_key(|path| path.len()) {
-                    Some((*worker_entity, Path(path)))
+                if let Some(path) = pathable_job_sites.min_by_key(|path| path.0.len()) {
+                    Some((*worker_entity, path))
                 } else {
                     None
                 }

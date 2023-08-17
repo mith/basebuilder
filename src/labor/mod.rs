@@ -19,11 +19,13 @@ pub struct LaborPlugin;
 
 impl Plugin for LaborPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(JobPlugin)
-            .add_plugin(StuckPlugin)
-            .add_plugin(DigPlugin)
-            .add_plugin(BuildStructurePlugin)
-            .add_plugin(ChopTreePlugin)
-            .add_plugin(HaulPlugin);
+        app.add_plugins((
+            JobPlugin,
+            StuckPlugin,
+            DigPlugin,
+            BuildStructurePlugin,
+            ChopTreePlugin,
+            HaulPlugin,
+        ));
     }
 }
