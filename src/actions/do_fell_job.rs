@@ -1,12 +1,12 @@
 use bevy::{
     prelude::{
-        App, Commands, Component, Entity, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate,
-        Query, Resource, With,
+        App, Commands, Component, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate, Query,
+        Resource, With,
     },
     utils::HashSet,
 };
 use big_brain::{
-    actions::StepsBuilder,
+    actions::ConcurrentlyBuilder,
     prelude::{ActionBuilder, ActionState, ConcurrentMode, Concurrently, ScorerBuilder, Steps},
     scorers::Score,
     thinker::{ActionSpan, Actor, ScorerSpan},
@@ -20,10 +20,7 @@ use crate::{
     tree::Tree,
 };
 
-use super::{
-    fell::fell_tree,
-    work::{complete_job, pick_job, CheckJobCanceled, CompleteJob, PickJob, UnassignWorker},
-};
+use super::fell::fell_tree;
 pub struct DoFellingJobPlugin;
 
 impl Plugin for DoFellingJobPlugin {
@@ -31,37 +28,23 @@ impl Plugin for DoFellingJobPlugin {
         app.add_systems(PreUpdate, (feller_scorer).in_set(BigBrainSet::Scorers))
             .add_systems(
                 PreUpdate,
-                (
-                    pick_job::<PickFellingJob>,
-                    set_fell_target,
-                    check_tree_exists,
-                    complete_job::<CompleteFellingJob>,
-                )
-                    .in_set(BigBrainSet::Actions),
+                (set_fell_target, check_tree_exists).in_set(BigBrainSet::Actions),
             );
     }
 }
 
-pub fn do_fell_job() -> StepsBuilder {
+pub fn do_fell_job() -> ConcurrentlyBuilder {
     info!("Building do_fell_job");
     let fell = Steps::build()
         .label("fell")
         .step(SetFellTarget)
-        .step(fell_tree())
-        .step(CompleteFellingJob);
+        .step(fell_tree());
 
-    let do_job = Concurrently::build()
+    Concurrently::build()
         .mode(ConcurrentMode::Race)
-        .label("do_job")
-        .push(CheckJobCanceled)
-        .push(CheckTreeExists)
-        .push(fell);
-
-    Steps::build()
         .label("do_fell_job")
-        .step(PickFellingJob)
-        .step(do_job)
-        .step(UnassignWorker)
+        .push(CheckTreeExists)
+        .push(fell)
 }
 
 #[derive(Component, Debug, Clone, ActionBuilder)]
@@ -105,19 +88,6 @@ fn set_fell_target(
 
 #[derive(Component, Clone, Debug, ScorerBuilder)]
 pub struct Feller;
-
-impl PickJob for PickFellingJob {
-    type Job = FellingJob;
-}
-
-#[derive(Component, Debug, Clone, ActionBuilder)]
-struct PickFellingJob;
-
-impl CompleteJob for CompleteFellingJob {
-    type Job = FellingJob;
-}
-#[derive(Component, Debug, Clone, ActionBuilder)]
-struct CompleteFellingJob;
 
 #[derive(Resource, Debug)]
 struct FellingJobs(HashSet<FellingJob>);

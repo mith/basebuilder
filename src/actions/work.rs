@@ -1,18 +1,11 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, marker::PhantomData};
 
-use bevy::{
-    prelude::{
-        App, Commands, Component, Entity, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate,
-        Query, Resource, With, Without,
-    },
-    utils::HashSet,
+use bevy::prelude::{
+    App, Commands, Component, Entity, IntoSystemConfigs, Plugin, PreUpdate, Query, With, Without,
 };
 use big_brain::{
     actions::StepsBuilder,
-    prelude::{
-        ActionBuilder, ActionState, ConcurrentMode, Concurrently, FirstToScore, ScorerBuilder,
-        Steps,
-    },
+    prelude::{ActionBuilder, ActionState, FirstToScore, ScorerBuilder, Steps},
     scorers::Score,
     thinker::{ActionSpan, Actor, ScorerSpan, Thinker, ThinkerBuilder},
     BigBrainSet,
@@ -20,15 +13,12 @@ use big_brain::{
 use tracing::{debug, info};
 
 use crate::{
-    actions::{
-        do_fell_job::{do_fell_job, Feller},
-        fell::FellTarget,
+    actions::do_fell_job::{do_fell_job, Feller},
+    labor::{
+        chop_tree::FellingJob,
+        job::{AssignedJob, AssignedWorker, Job, JobManagerParams},
     },
-    labor::job::{AssignedJob, AssignedWorker, Job, JobManagerParams},
-    tree::Tree,
 };
-
-use super::fell::fell_tree;
 
 pub struct WorkPlugin;
 
@@ -37,7 +27,8 @@ impl Plugin for WorkPlugin {
         app.add_systems(PreUpdate, (jobs_available).in_set(BigBrainSet::Scorers))
             .add_systems(
                 PreUpdate,
-                (check_job_canceled, unassign_worker).in_set(BigBrainSet::Actions),
+                (check_job_canceled, pick_job::<FellingJob>, complete_job)
+                    .in_set(BigBrainSet::Actions),
             );
     }
 }
@@ -47,7 +38,16 @@ pub fn build_worker_thinker() -> ThinkerBuilder {
     Thinker::build()
         .label("worker")
         .picker(FirstToScore::new(0.8))
-        .when(Feller, do_fell_job())
+        .when(Feller, do_job::<FellingJob, _>(do_fell_job()))
+}
+
+fn do_job<T: Component + Debug, A: ActionBuilder + 'static>(job_steps: A) -> StepsBuilder {
+    info!("Building do_job");
+    Steps::build()
+        .label("do_job")
+        .step(PickJobBuilder::<T>(PhantomData))
+        .step(job_steps)
+        .step(CompleteJob)
 }
 
 #[derive(Component, Debug, Clone, ScorerBuilder)]
@@ -70,13 +70,27 @@ fn jobs_available(
     }
 }
 
-pub trait PickJob {
-    type Job: Component;
+#[derive(Debug, Clone)]
+pub struct PickJobBuilder<T>(std::marker::PhantomData<T>)
+where
+    T: Component;
+
+impl<T> ActionBuilder for PickJobBuilder<T>
+where
+    T: Component + Debug,
+{
+    fn build(&self, cmd: &mut Commands, action: Entity, actor: Entity) {
+        cmd.entity(action)
+            .insert(PickJob::<T>(std::marker::PhantomData));
+    }
 }
 
-pub fn pick_job<TPickJobAction: std::fmt::Debug + Component + PickJob>(
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<TPickJobAction>>,
-    job_query: Query<Entity, (With<TPickJobAction::Job>, Without<AssignedWorker>)>,
+#[derive(Component, Debug, Clone)]
+pub struct PickJob<T: Component>(std::marker::PhantomData<T>);
+
+pub fn pick_job<T: Component>(
+    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<PickJob<T>>>,
+    job_query: Query<Entity, (With<T>, Without<AssignedWorker>)>,
     mut job_manager_params: JobManagerParams,
 ) {
     let mut jobs = job_query.iter().collect::<Vec<_>>();
@@ -113,12 +127,12 @@ pub fn pick_job<TPickJobAction: std::fmt::Debug + Component + PickJob>(
     }
 }
 
-pub trait CompleteJob {
-    type Job: Component;
-}
+#[derive(Component, Debug, Clone, ActionBuilder)]
+pub struct CompleteJob;
 
-pub fn complete_job<TCompleteJobAction: std::fmt::Debug + Component + CompleteJob>(
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<TCompleteJobAction>>,
+pub fn complete_job(
+    mut commands: Commands,
+    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<CompleteJob>>,
     assigned_job_query: Query<&AssignedJob>,
     mut job_manager_params: JobManagerParams,
 ) {
@@ -135,6 +149,7 @@ pub fn complete_job<TCompleteJobAction: std::fmt::Debug + Component + CompleteJo
                 if let Ok(assigned_job) = assigned_job_query.get(actor.0) {
                     info!(job=?assigned_job, "Completing job");
                     job_manager_params.complete_job(assigned_job.0, actor.0);
+                    commands.entity(actor.0).remove::<AssignedJob>();
                     *action_state = ActionState::Success;
                 } else {
                     info!("No job to complete");
@@ -176,34 +191,6 @@ fn check_job_canceled(
             }
             ActionState::Cancelled => {
                 info!("Checking if job is canceled canceled");
-                *action_state = ActionState::Failure;
-            }
-            _ => {}
-        }
-    }
-}
-
-#[derive(Component, Debug, Clone, ActionBuilder)]
-pub struct UnassignWorker;
-
-fn unassign_worker(
-    mut commands: Commands,
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<UnassignWorker>>,
-) {
-    for (actor, mut action_state, span) in &mut action_query {
-        let _guard = span.span().enter();
-
-        match *action_state {
-            ActionState::Requested => {
-                info!("Unassigning worker");
-                *action_state = ActionState::Executing;
-            }
-            ActionState::Executing => {
-                commands.entity(actor.0).remove::<AssignedJob>();
-                *action_state = ActionState::Success;
-            }
-            ActionState::Cancelled => {
-                info!("Unassign worker cancelled");
                 *action_state = ActionState::Failure;
             }
             _ => {}
