@@ -18,7 +18,7 @@ use tracing::{debug, error, info};
 use crate::{
     actions::move_to::follow_path,
     health::HealthDamageEvent,
-    labor::job::{self, AssignedJob, JobSite},
+    labor::job::JobSite,
     movement::Walker,
     pathfinding::Pathfinding,
     terrain::TerrainParams,
@@ -43,6 +43,105 @@ pub struct Fell;
 
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct FellTarget(pub Entity);
+fn at_job_site(actor_position: Vec2, job_site: &JobSite) -> bool {
+    // if we're close to a job site, we're done
+    job_site
+        .0
+        .iter()
+        .any(|&site| Vec2::new(site.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
+}
+
+#[derive(Component, Clone, Debug, ActionBuilder)]
+struct MoveToTree;
+
+fn fell_job_site(target: Entity, global_transform_query: &Query<&GlobalTransform>) -> JobSite {
+    let target_position = global_transform_query
+        .get(target)
+        .unwrap()
+        .translation()
+        .xy();
+    JobSite(vec![
+        target_position - Vec2::new(16., 0.),
+        target_position + Vec2::new(16., 0.),
+    ])
+}
+
+fn move_to_tree(
+    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<MoveToTree>>,
+    global_transform_query: Query<&GlobalTransform>,
+    fell_target_query: Query<&FellTarget>,
+    tree_query: Query<&Tree>,
+    pathfinding: Pathfinding,
+    terrain: TerrainParams,
+    mut walker_query: Query<&mut Walker>,
+) {
+    for (actor, mut action_state, span) in &mut action_query {
+        let _guard = span.span().enter();
+
+        match *action_state {
+            ActionState::Requested => {
+                info!("Starting move to tree");
+                *action_state = ActionState::Executing;
+            }
+            ActionState::Executing => {
+                let actor_position = global_transform_query
+                    .get(actor.0)
+                    .unwrap()
+                    .translation()
+                    .xy();
+                let Some(fell_target) = fell_target_query.get(actor.0).ok() else {
+                    error!("No fell target");
+                    *action_state = ActionState::Failure;
+                    continue;
+                };
+                if tree_query.get(fell_target.0).is_err() {
+                    info!("Tree no longer exists");
+                    *action_state = ActionState::Cancelled;
+                    continue;
+                }
+                let job_site = fell_job_site(fell_target.0, &global_transform_query);
+                // if we're close to a job site, we're done
+                if at_job_site(actor_position, &job_site) {
+                    info!("Arrived at tree");
+                    let mut walker = walker_query
+                        .get_mut(actor.0)
+                        .expect("Actor should have a walker");
+
+                    walker.move_direction = None;
+                    *action_state = ActionState::Success;
+                } else {
+                    debug!("Moving to tree");
+                    let path = job_site
+                        .0
+                        .iter()
+                        .find_map(|&site| pathfinding.find_path(actor_position, site));
+                    if let Some(path) = path {
+                        let mut walker = walker_query
+                            .get_mut(actor.0)
+                            .expect("Actor should have a walker");
+
+                        debug!("Following path to tree");
+                        follow_path(path, &mut walker, actor_position, &terrain);
+                    } else {
+                        error!(actor_position=?actor_position, job_site=?job_site, "No path found to tree");
+                        *action_state = ActionState::Failure;
+                    }
+                }
+            }
+            ActionState::Cancelled => {
+                info!("Cancelling move to tree");
+                let mut walker = walker_query
+                    .get_mut(actor.0)
+                    .expect("Actor should have a walker");
+
+                walker.move_direction = None;
+
+                *action_state = ActionState::Failure;
+            }
+            _ => {}
+        }
+    }
+}
 
 #[derive(Component, Debug, Reflect)]
 pub struct FellingTimer {
@@ -56,7 +155,7 @@ fn fell(
     global_transform_query: Query<&GlobalTransform>,
     fell_target_query: Query<&FellTarget>,
     tree_query: Query<&Tree>,
-    mut fell_timer_query: Query<&mut FellingTimer>,
+    fell_timer_query: Query<&mut FellingTimer>,
     mut tree_destroyed_event_reader: EventReader<TreeDestroyedEvent>,
 ) {
     for (actor, mut action_state, span) in &mut fell_action_query {
@@ -140,100 +239,6 @@ fn felling_timer(
                 entity: *tree_entity,
                 damage: 20,
             });
-        }
-    }
-}
-
-fn at_job_site(actor_position: Vec2, job_site: &JobSite) -> bool {
-    // if we're close to a job site, we're done
-    job_site
-        .0
-        .iter()
-        .any(|&site| Vec2::new(site.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
-}
-
-#[derive(Component, Clone, Debug, ActionBuilder)]
-struct MoveToTree;
-
-fn fell_job_site(target: Entity, global_transform_query: &Query<&GlobalTransform>) -> JobSite {
-    let target_position = global_transform_query
-        .get(target)
-        .unwrap()
-        .translation()
-        .xy();
-    JobSite(vec![
-        target_position - Vec2::new(16., 0.),
-        target_position + Vec2::new(16., 0.),
-    ])
-}
-
-fn move_to_tree(
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<MoveToTree>>,
-    global_transform_query: Query<&GlobalTransform>,
-    fell_target_query: Query<&FellTarget>,
-    pathfinding: Pathfinding,
-    terrain: TerrainParams,
-    mut walker_query: Query<&mut Walker>,
-) {
-    for (actor, mut action_state, span) in &mut action_query {
-        let _guard = span.span().enter();
-
-        match *action_state {
-            ActionState::Requested => {
-                info!("Starting move to tree");
-                *action_state = ActionState::Executing;
-            }
-            ActionState::Executing => {
-                let actor_position = global_transform_query
-                    .get(actor.0)
-                    .unwrap()
-                    .translation()
-                    .xy();
-                let Some(fell_target) = fell_target_query.get(actor.0).ok() else {
-                    error!("No fell target");
-                    *action_state = ActionState::Failure;
-                    continue;
-                };
-                let job_site = fell_job_site(fell_target.0, &global_transform_query);
-                // if we're close to a job site, we're done
-                if at_job_site(actor_position, &job_site) {
-                    info!("Arrived at tree");
-                    let mut walker = walker_query
-                        .get_mut(actor.0)
-                        .expect("Actor should have a walker");
-
-                    walker.move_direction = None;
-                    *action_state = ActionState::Success;
-                } else {
-                    debug!("Moving to tree");
-                    let path = job_site
-                        .0
-                        .iter()
-                        .find_map(|&site| pathfinding.find_path(actor_position, site));
-                    if let Some(path) = path {
-                        let mut walker = walker_query
-                            .get_mut(actor.0)
-                            .expect("Actor should have a walker");
-
-                        debug!("Following path to tree");
-                        follow_path(path, &mut walker, actor_position, &terrain);
-                    } else {
-                        error!(actor_position=?actor_position, job_site=?job_site, "No path found to tree");
-                        *action_state = ActionState::Failure;
-                    }
-                }
-            }
-            ActionState::Cancelled => {
-                info!("Cancelling move to tree");
-                let mut walker = walker_query
-                    .get_mut(actor.0)
-                    .expect("Actor should have a walker");
-
-                walker.move_direction = None;
-
-                *action_state = ActionState::Failure;
-            }
-            _ => {}
         }
     }
 }

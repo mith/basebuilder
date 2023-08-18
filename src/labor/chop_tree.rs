@@ -3,7 +3,7 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
-    actions::work::FellJob,
+    actions::do_fell_job::FellJob,
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
     labor::job::{all_workers_eligible, Job, JobSite},
@@ -24,7 +24,6 @@ impl Plugin for ChopTreePlugin {
                 (
                     mark_trees.run_if(state_exists_and_equals(FellingToolState::Designating)),
                     all_workers_eligible::<FellingJob>,
-                    finish_felling_job,
                 )
                     .before(JobAssignmentSet),
             );
@@ -91,31 +90,4 @@ pub struct FellingCompleteEvent {
     pub parent_job: Option<Entity>,
     pub worker: Entity,
     pub tree: Entity,
-}
-
-fn finish_felling_job(
-    mut tree_destroyed_event_reader: EventReader<TreeDestroyedEvent>,
-    felling_job_query: Query<(Entity, &FellJob, &AssignedWorker, Option<&Parent>)>,
-    mut felling_complete_event_writer: EventWriter<FellingCompleteEvent>,
-    mut job_manager_params: JobManagerParams,
-) {
-    for tree_destroyed_event in tree_destroyed_event_reader.iter() {
-        if let Some((fell_job_entity, fell_job, AssignedWorker(feller_entity), parent)) =
-            felling_job_query
-                .iter()
-                .find(|(_, fell_job, _, _)| fell_job.tree == tree_destroyed_event.tree)
-        {
-            debug_assert!(tree_destroyed_event.tree == fell_job.tree, "Tree mismatch");
-
-            job_manager_params.complete_job(fell_job_entity, *feller_entity);
-            info!(feller=?feller_entity, felling_job=?fell_job_entity, "Felling complete");
-
-            felling_complete_event_writer.send(FellingCompleteEvent {
-                job: fell_job_entity,
-                parent_job: parent.map(|p| p.get()),
-                worker: *feller_entity,
-                tree: tree_destroyed_event.tree,
-            });
-        }
-    }
 }

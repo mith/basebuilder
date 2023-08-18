@@ -2,6 +2,7 @@ use bevy::prelude::{App, Plugin};
 
 pub mod deliver;
 pub mod dig;
+pub mod do_fell_job;
 pub mod fell;
 pub mod meander;
 pub mod move_to;
@@ -19,6 +20,7 @@ impl Plugin for ActionsPlugin {
             fell::FellPlugin,
             move_to::MoveToPlugin,
             work::WorkPlugin,
+            do_fell_job::DoFellJobPlugin,
             meander::MeanderPlugin,
         ));
     }

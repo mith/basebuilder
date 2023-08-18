@@ -20,8 +20,12 @@ use big_brain::{
 use tracing::{debug, info};
 
 use crate::{
-    actions::fell::FellTarget,
+    actions::{
+        do_fell_job::{do_fell_job, Feller},
+        fell::FellTarget,
+    },
     labor::job::{AssignedJob, AssignedWorker, Job, JobManagerParams},
+    tree::Tree,
 };
 
 use super::fell::fell_tree;
@@ -30,21 +34,11 @@ pub struct WorkPlugin;
 
 impl Plugin for WorkPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            PreUpdate,
-            (jobs_available, feller_scorer).in_set(BigBrainSet::Scorers),
-        )
-        .add_systems(
-            PreUpdate,
-            (
-                pick_job::<PickFellJob>,
-                check_job_canceled,
-                set_fell_target,
-                unassign_worker,
-                complete_job::<CompleteFellJob>,
-            )
-                .in_set(BigBrainSet::Actions),
-        );
+        app.add_systems(PreUpdate, (jobs_available).in_set(BigBrainSet::Scorers))
+            .add_systems(
+                PreUpdate,
+                (check_job_canceled, unassign_worker).in_set(BigBrainSet::Actions),
+            );
     }
 }
 
@@ -76,18 +70,11 @@ fn jobs_available(
     }
 }
 
-trait PickJob {
+pub trait PickJob {
     type Job: Component;
 }
 
-impl PickJob for PickFellJob {
-    type Job = FellJob;
-}
-
-#[derive(Component, Debug, Clone, ActionBuilder)]
-struct PickFellJob;
-
-fn pick_job<TPickJobAction: std::fmt::Debug + Component + PickJob>(
+pub fn pick_job<TPickJobAction: std::fmt::Debug + Component + PickJob>(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<TPickJobAction>>,
     job_query: Query<Entity, (With<TPickJobAction::Job>, Without<AssignedWorker>)>,
     mut job_manager_params: JobManagerParams,
@@ -126,18 +113,11 @@ fn pick_job<TPickJobAction: std::fmt::Debug + Component + PickJob>(
     }
 }
 
-trait CompleteJob {
+pub trait CompleteJob {
     type Job: Component;
 }
 
-impl CompleteJob for CompleteFellJob {
-    type Job = FellJob;
-}
-
-#[derive(Component, Debug, Clone, ActionBuilder)]
-struct CompleteFellJob;
-
-fn complete_job<TCompleteJobAction: std::fmt::Debug + Component + CompleteJob>(
+pub fn complete_job<TCompleteJobAction: std::fmt::Debug + Component + CompleteJob>(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<TCompleteJobAction>>,
     assigned_job_query: Query<&AssignedJob>,
     mut job_manager_params: JobManagerParams,
@@ -171,107 +151,7 @@ fn complete_job<TCompleteJobAction: std::fmt::Debug + Component + CompleteJob>(
 }
 
 #[derive(Component, Debug, Clone, ActionBuilder)]
-struct SetFellTarget;
-
-fn set_fell_target(
-    mut commands: Commands,
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<SetFellTarget>>,
-    assigned_job_query: Query<&AssignedJob>,
-    fell_job_query: Query<&FellJob>,
-) {
-    for (actor, mut action_state, span) in &mut action_query {
-        let _guard = span.span().enter();
-
-        match *action_state {
-            ActionState::Requested => {
-                info!("Setting fell target");
-                *action_state = ActionState::Executing;
-            }
-            ActionState::Executing => {
-                // Add a FellTarget component to the actor
-                let assigned_fell_job = assigned_job_query
-                    .get(actor.0)
-                    .and_then(|assigned_job| fell_job_query.get(assigned_job.0))
-                    .expect("Actor should have an assigned job");
-
-                info!(job=?assigned_fell_job, "Setting fell target");
-                commands
-                    .entity(actor.0)
-                    .insert(FellTarget(assigned_fell_job.tree));
-                *action_state = ActionState::Success;
-            }
-            ActionState::Cancelled => {
-                info!("Setting fell target cancelled");
-                *action_state = ActionState::Failure;
-            }
-            _ => {}
-        }
-    }
-}
-
-#[derive(Component, Clone, Debug, ScorerBuilder)]
-struct Feller;
-
-#[derive(Component, Debug)]
-pub struct FellJob {
-    pub tree: Entity,
-}
-
-#[derive(Resource, Debug)]
-struct FellJobs(HashSet<FellJob>);
-
-fn feller_scorer(
-    mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<Feller>>,
-    fell_jobs_query: Query<&FellJob>,
-    _global_transform_query: Query<&GlobalTransform>,
-) {
-    for (_actor, mut score, span) in &mut actor_query {
-        let _guard = span.span().enter();
-        // for now, just return a score of 1.0 when there is a job
-        if fell_jobs_query.iter().next().is_some() {
-            score.set(1.0);
-        } else {
-            score.set(0.0);
-        }
-
-        // let actor_position = global_transform_query
-        //     .get(actor.0)
-        //     .unwrap()
-        //     .translation()
-        //     .xy();
-
-        // let mut scores = vec![];
-
-        // for FellJob { tree } in &fell_jobs_query {
-        //     let tree_position = global_transform_query
-        //         .get(*tree)
-        //         .unwrap()
-        //         .translation()
-        //         .xy();
-
-        //     let distance = actor_position.distance(tree_position);
-
-        //     const MAX_DISTANCE: f32 = 128.0;
-        //     const MIN_DISTANCE: f32 = 16.0;
-        //     const SCALE: f32 = 1.0 / (MAX_DISTANCE - MIN_DISTANCE);
-
-        //     // Score on a curve, ranging from 1.0 at 16 and closer distance to 0.0 at 128 and up distance
-        //     // distance can range from zero to infinity, but we only care about 16 to 128
-        //     let score_value =
-        //         1.0 - (distance.clamp(MIN_DISTANCE, MAX_DISTANCE) - MIN_DISTANCE) * SCALE;
-
-        //     info!("Score: {}", score_value);
-        //     scores.push(score_value);
-        // }
-
-        // // pick highest score
-        // let highest_score = scores.into_iter().fold(0.0, f32::max);
-        // score.set(highest_score);
-    }
-}
-
-#[derive(Component, Debug, Clone, ActionBuilder)]
-struct CheckJobCanceled;
+pub struct CheckJobCanceled;
 
 fn check_job_canceled(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<CheckJobCanceled>>,
@@ -282,7 +162,7 @@ fn check_job_canceled(
 
         match *action_state {
             ActionState::Requested => {
-                info!("Checking job canceled");
+                info!("Checking if job is cancelled");
                 *action_state = ActionState::Executing;
             }
             ActionState::Executing => {
@@ -295,7 +175,7 @@ fn check_job_canceled(
                 }
             }
             ActionState::Cancelled => {
-                info!("Check job canceled cancelled");
+                info!("Checking if job is canceled canceled");
                 *action_state = ActionState::Failure;
             }
             _ => {}
@@ -304,7 +184,7 @@ fn check_job_canceled(
 }
 
 #[derive(Component, Debug, Clone, ActionBuilder)]
-struct UnassignWorker;
+pub struct UnassignWorker;
 
 fn unassign_worker(
     mut commands: Commands,
@@ -329,24 +209,4 @@ fn unassign_worker(
             _ => {}
         }
     }
-}
-
-fn do_fell_job() -> StepsBuilder {
-    let fell = Steps::build()
-        .label("fell")
-        .step(SetFellTarget)
-        .step(fell_tree())
-        .step(CompleteFellJob);
-
-    let do_job = Concurrently::build()
-        .mode(ConcurrentMode::Race)
-        .label("do_job")
-        .push(CheckJobCanceled)
-        .push(fell);
-
-    Steps::build()
-        .label("do_fell_job")
-        .step(PickFellJob)
-        .step(do_job)
-        .step(UnassignWorker)
 }
