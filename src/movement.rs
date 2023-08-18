@@ -1,4 +1,4 @@
-use bevy::{ecs::system::SystemParam, math::Vec3Swizzles, prelude::*};
+use bevy::{math::Vec3Swizzles, prelude::*};
 
 use bevy_rapier2d::prelude::{
     Collider, CollisionGroups, KinematicCharacterController, KinematicCharacterControllerOutput,

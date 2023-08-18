@@ -64,16 +64,4 @@ impl TerrainParams<'_, '_> {
         let tile_storage = self.tile_storage.single();
         tile_storage.get(&tile_pos)
     }
-
-    pub fn get_tile(&self, tile_pos: TilePos) -> Option<u16> {
-        let terrain_data = self.terrain_data_query.single();
-        terrain_data
-            .0
-            .get([tile_pos.x as usize, tile_pos.y as usize])
-            .copied()
-    }
-
-    pub fn get_terrain_entity(&self) -> Entity {
-        self.terrain_query.single().0
-    }
 }

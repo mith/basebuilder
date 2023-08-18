@@ -42,6 +42,7 @@ impl Plugin for WorkPlugin {
                 set_fell_target,
                 remove_fell_target,
                 unassign_worker,
+                complete_job::<CompleteFellJob>,
             )
                 .in_set(BigBrainSet::Actions),
         );
@@ -119,6 +120,51 @@ fn pick_job<TPickJobAction: std::fmt::Debug + Component + PickJob>(
             }
             ActionState::Cancelled => {
                 info!("Pickup cancelled");
+                *action_state = ActionState::Failure;
+            }
+            _ => {}
+        }
+    }
+}
+
+trait CompleteJob {
+    type Job: Component;
+}
+
+impl CompleteJob for CompleteFellJob {
+    type Job = FellJob;
+}
+
+#[derive(Component, Debug, Clone, ActionBuilder)]
+struct CompleteFellJob;
+
+fn complete_job<TCompleteJobAction: std::fmt::Debug + Component + CompleteJob>(
+    _commands: Commands,
+    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<TCompleteJobAction>>,
+    assigned_job_query: Query<&AssignedJob>,
+    mut job_manager_params: JobManagerParams,
+) {
+    for (actor, mut action_state, span) in &mut action_query {
+        let _guard = span.span().enter();
+
+        match *action_state {
+            ActionState::Requested => {
+                info!("Starting completing job");
+                *action_state = ActionState::Executing;
+            }
+            ActionState::Executing => {
+                info!("Completing job");
+                if let Ok(assigned_job) = assigned_job_query.get(actor.0) {
+                    info!(job=?assigned_job, "Completing job");
+                    job_manager_params.complete_job(assigned_job.0, actor.0);
+                    *action_state = ActionState::Success;
+                } else {
+                    info!("No job to complete");
+                    *action_state = ActionState::Failure;
+                }
+            }
+            ActionState::Cancelled => {
+                info!("Completing job cancelled");
                 *action_state = ActionState::Failure;
             }
             _ => {}
@@ -322,7 +368,8 @@ fn do_fell_job() -> StepsBuilder {
         .label("fell")
         .step(SetFellTarget)
         .step(fell_tree())
-        .step(RemoveFellTarget);
+        .step(RemoveFellTarget)
+        .step(CompleteFellJob);
 
     let do_job = Concurrently::build()
         .mode(ConcurrentMode::Race)

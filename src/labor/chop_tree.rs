@@ -6,11 +6,11 @@ use crate::{
     actions::work::FellJob,
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
-    labor::job::{all_workers_eligible, Complete, Job, JobSite},
+    labor::job::{all_workers_eligible, Job, JobSite},
     tree::{Tree, TreeDestroyedEvent, TREE_COLLISION_GROUP},
 };
 
-use super::job::{AssignedWorker, JobAssignmentSet};
+use super::job::{AssignedWorker, JobAssignmentSet, JobManagerParams};
 
 pub struct ChopTreePlugin;
 
@@ -94,10 +94,10 @@ pub struct FellingCompleteEvent {
 }
 
 fn finish_felling_job(
-    mut commands: Commands,
     mut tree_destroyed_event_reader: EventReader<TreeDestroyedEvent>,
     felling_job_query: Query<(Entity, &FellJob, &AssignedWorker, Option<&Parent>)>,
     mut felling_complete_event_writer: EventWriter<FellingCompleteEvent>,
+    mut job_manager_params: JobManagerParams,
 ) {
     for tree_destroyed_event in tree_destroyed_event_reader.iter() {
         if let Some((fell_job_entity, fell_job, AssignedWorker(feller_entity), parent)) =
@@ -107,9 +107,7 @@ fn finish_felling_job(
         {
             debug_assert!(tree_destroyed_event.tree == fell_job.tree, "Tree mismatch");
 
-            // Mark the job as complete
-            commands.entity(fell_job_entity).insert(Complete);
-
+            job_manager_params.complete_job(fell_job_entity, *feller_entity);
             info!(feller=?feller_entity, felling_job=?fell_job_entity, "Felling complete");
 
             felling_complete_event_writer.send(FellingCompleteEvent {

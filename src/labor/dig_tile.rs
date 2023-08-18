@@ -8,7 +8,7 @@ use crate::{
     terrain::TerrainParams,
 };
 
-use super::job::{register_job, AssignedWorker, Complete};
+use super::job::{AssignedWorker, CompletedJob};
 
 pub struct DigPlugin;
 
@@ -27,8 +27,6 @@ impl Plugin for DigPlugin {
                     finish_digjob,
                 ),
             );
-
-        register_job::<DigJob, Digger>(app);
     }
 }
 
@@ -91,7 +89,7 @@ fn schedule_dig_action(
     _commands: Commands,
     dig_job_query: Query<
         (Entity, &DigJob, &AssignedWorker, &JobSite),
-        (Without<AwaitingDig>, Without<Complete>),
+        (Without<AwaitingDig>, Without<CompletedJob>),
     >,
 ) {
     for (_job_entity, DigJob(_tile_entity), AssignedWorker(_worker_entity), _job_site) in

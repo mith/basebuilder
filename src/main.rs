@@ -6,6 +6,7 @@ use bevy_egui::EguiPlugin;
 use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 
 use big_brain::BigBrainPlugin;
+use building_material::BuildingMaterialPlugin;
 use climbable::ClimbablePlugin;
 use cursor_position::CursorPositionPlugin;
 use debug::DebugPlugin;
@@ -15,7 +16,6 @@ use gravity::GravityPlugin;
 use health::HealthPlugin;
 use hit::HitPlugin;
 use hovered_tile::HoveredTilePlugin;
-use item::ItemPlugin;
 use labor::LaborPlugin;
 use ladder::LadderPlugin;
 use load::LoadPlugin;
@@ -24,7 +24,6 @@ use main_state::MainStatePlugin;
 use material::MaterialPlugin;
 use movement::MovementPlugin;
 use pan_zoom_camera2d::PanZoomCamera2dPlugin;
-use resource::BuildingMaterialPlugin;
 use terrain::TerrainPlugin;
 use terrain_settings::TerrainSettingsPlugin;
 use toolbar::ToolbarPlugin;
@@ -32,8 +31,8 @@ use tree::TreePlugin;
 use world_generation::WorldGenerationPlugin;
 
 mod actions;
+mod building_material;
 mod climbable;
-mod crafting;
 mod cursor_position;
 mod debug;
 mod designation_layer;
@@ -42,8 +41,6 @@ mod gravity;
 mod health;
 mod hit;
 mod hovered_tile;
-mod inventory;
-mod item;
 mod labor;
 mod ladder;
 mod load;
@@ -53,7 +50,6 @@ mod material;
 mod movement;
 mod pan_zoom_camera2d;
 mod pathfinding;
-mod resource;
 mod terrain;
 mod terrain_settings;
 mod toolbar;
@@ -93,7 +89,6 @@ fn main() {
         CursorPositionPlugin,
         PanZoomCamera2dPlugin,
         MaterialPlugin,
-        ItemPlugin,
         TerrainSettingsPlugin,
         TerrainPlugin,
         WorldGenerationPlugin,

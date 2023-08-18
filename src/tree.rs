@@ -6,10 +6,10 @@ use rand::{seq::IteratorRandom, SeedableRng};
 use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
+    building_material::BuildingMaterial,
     health::Health,
     labor::chop_tree::PICKER_COLLISION_GROUP,
     main_state::MainState,
-    resource::BuildingMaterial,
     terrain::{TerrainSet, TERRAIN_COLLISION_GROUP},
     terrain_settings::TerrainSettings,
 };

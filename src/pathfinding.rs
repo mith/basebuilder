@@ -144,10 +144,10 @@ pub fn can_stand(terrain_data: &TerrainData, tile_pos: TilePos) -> bool {
         // Tileposition is outside of the map
         return false;
     };
-    let south_tile_is_solid = terrain_data
+
+    terrain_data
         .get_tile(south_tile_pos.into())
-        .map_or(false, |tile| tile != 0);
-    south_tile_is_solid
+        .map_or(false, |tile| tile != 0)
 }
 
 pub fn can_move_to(
@@ -178,8 +178,7 @@ pub fn can_move_to(
             }
         } else if direction == SquareDirection::North {
             // if moving to tile below, check if next tile is climbable
-            let next_is_climbable = climbable_map.is_climbable(new_tile_pos);
-            return next_is_climbable;
+            return climbable_map.is_climbable(new_tile_pos);
         }
     }
 
@@ -189,10 +188,9 @@ pub fn can_move_to(
                 // Tileposition is outside of the map
                 return false;
             };
-            let north_tile_is_empty = terrain_data
+            terrain_data
                 .get_tile(north_tile_pos.into())
-                .map_or(false, |tile| tile == 0);
-            north_tile_is_empty
+                .map_or(false, |tile| tile == 0)
         }
 
         SquareDirection::SouthEast => {
@@ -201,10 +199,9 @@ pub fn can_move_to(
                 return false;
             };
 
-            let east_tile_is_empty = terrain_data
+            terrain_data
                 .get_tile(east_tile_pos.into())
-                .map_or(false, |tile| tile == 0);
-            east_tile_is_empty
+                .map_or(false, |tile| tile == 0)
         }
         SquareDirection::SouthWest => {
             let Some(west_tile_pos) = tile_pos.square_offset(&SquareDirection::West, &map_size) else {
@@ -212,10 +209,9 @@ pub fn can_move_to(
                 return false;
             };
 
-            let west_tile_is_empty = terrain_data
+            terrain_data
                 .get_tile(west_tile_pos.into())
-                .map_or(false, |tile| tile == 0);
-            west_tile_is_empty
+                .map_or(false, |tile| tile == 0)
         }
         SquareDirection::West | SquareDirection::East => {
             let Some(_target_tile_pos) = tile_pos.square_offset(&direction, &map_size) else {

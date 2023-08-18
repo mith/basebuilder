@@ -1,117 +1,43 @@
 use bevy::prelude::*;
 
-use crate::labor::job::{all_workers_eligible, Complete, JobSite};
+use crate::labor::job::all_workers_eligible;
 
-use super::job::{AssignedWorker, JobAssignmentSet};
+use super::job::JobAssignmentSet;
 
 pub struct HaulPlugin;
 
 impl Plugin for HaulPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<HaulCompletedEvent>().add_systems(
+        app.add_systems(
             Update,
-            (
-                all_workers_eligible::<Haul>,
-                start_haul_job,
-                pickup_complete,
-                start_delivery,
-                delivery_complete,
-            )
-                .before(JobAssignmentSet),
+            (all_workers_eligible::<HaulRequest>).before(JobAssignmentSet),
         );
     }
 }
 
-#[derive(Component)]
-pub struct Haul {
-    pub load: Entity,
-    pub amount: u32,
-    pub to: Entity,
-    pickup_site: JobSite,
-    delivery_site: JobSite,
+pub enum HaulItem {
+    Entity(Entity),
+    ObjectType(Name),
 }
 
-impl Haul {
-    pub fn new(
-        load: Entity,
-        amount: u32,
-        to: Entity,
-        pickup_site: JobSite,
-        delivery_site: JobSite,
-    ) -> Self {
+#[derive(Component)]
+pub struct HaulRequest {
+    pub load: HaulItem,
+    pub to: Entity,
+}
+
+impl HaulRequest {
+    pub fn request_entity(load: Entity, to: Entity) -> Self {
         Self {
-            load,
-            amount,
+            load: HaulItem::Entity(load),
             to,
-            pickup_site,
-            delivery_site,
         }
     }
-}
 
-#[derive(Component, Default)]
-pub struct Hauler;
-
-#[derive(Component)]
-struct AwaitingPickup(Entity);
-
-/// Start a pickup job when a haul job is assigned and the worker is not already carrying the load
-/// (i.e. the load is not a child of the worker)
-fn start_haul_job(
-    _commands: Commands,
-    haul_job_query: Query<
-        (Entity, &Haul, &AssignedWorker),
-        (
-            Without<AwaitingPickup>,
-            Without<AwaitingDelivery>,
-            Without<Complete>,
-        ),
-    >,
-    _children_query: Query<&Children>,
-) {
-    for (_haul_job_entity, _haul_job, AssignedWorker(_hauler_entity)) in &mut haul_job_query.iter()
-    {
+    pub fn request_object_type(load: Name, to: Entity) -> Self {
+        Self {
+            load: HaulItem::ObjectType(load),
+            to,
+        }
     }
-}
-
-/// Check if a hauler is carrying an item
-fn is_hauler_carrying_load(
-    children_query: &Query<&Children>,
-    hauler: Entity,
-    load: Entity,
-) -> bool {
-    children_query.iter_descendants(hauler).any(|e| e == load)
-}
-
-#[derive(Component, Default)]
-pub struct WorkerCarrying;
-
-fn pickup_complete(_commands: Commands, _haul_job_query: Query<(Entity, &Haul, &AwaitingPickup)>) {}
-
-#[derive(Component)]
-struct AwaitingDelivery(Entity);
-
-fn start_delivery(
-    _commands: Commands,
-    haul_job_query: Query<
-        (Entity, &Haul, &AssignedWorker),
-        (With<WorkerCarrying>, Without<AwaitingDelivery>),
-    >,
-) {
-    for (_haul_job_entity, _haul_job, AssignedWorker(_hauler_entity)) in &haul_job_query {}
-}
-
-#[derive(Event)]
-pub struct HaulCompletedEvent {
-    pub job: Entity,
-    pub parent_job: Option<Entity>,
-    pub worker: Entity,
-    pub item: Entity,
-}
-
-fn delivery_complete(
-    _commands: Commands,
-    _haul_job_query: Query<(Entity, &AwaitingPickup, &Haul, Option<&Parent>)>,
-    _haul_complete_event_writer: EventWriter<HaulCompletedEvent>,
-) {
 }

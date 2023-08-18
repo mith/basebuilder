@@ -5,18 +5,15 @@ use bevy_ecs_tilemap::prelude::TilemapGridSize;
 use bevy_rapier2d::prelude::Group;
 
 use crate::{
+    building_material::{BuildingMaterial, BuildingMaterialLocator, Reserved},
     cursor_position::LastCursorPosition,
     hovered_tile::{HoveredTile, HoveredTileSet},
-    labor::job::{all_workers_eligible, AssignedJob, AtJobSite, Job, JobSite, Worker},
+    labor::job::{all_workers_eligible, AssignedJob, Job, JobSite, Worker},
     ladder::spawn_ladder,
-    resource::{BuildingMaterial, BuildingMaterialLocator, Reserved},
     terrain::Terrain,
 };
 
-use super::{
-    haul::{Haul, HaulCompletedEvent},
-    job::{register_job, Complete},
-};
+use super::{haul::HaulRequest, job::CompletedJob, job::JobCompletedEvent};
 
 pub struct BuildStructurePlugin;
 
@@ -42,8 +39,6 @@ impl Plugin for BuildStructurePlugin {
                     finish_building,
                 ),
             );
-
-        register_job::<ConstructionJob, Builder>(app);
     }
 }
 
@@ -187,26 +182,10 @@ fn designate_building_materials(
                 let y = resource_transform.translation().y;
                 JobSite(vec![Vec2::new(x, y)])
             };
-            let delivery_sites = {
-                let x = construction_transform.translation().x;
-                let y = construction_transform.translation().y;
-                (-1..=1)
-                    .flat_map(|x| (-1..=1).map(move |y| Vec2::new(x as f32, y as f32)))
-                    .map(|offset| Vec2::new(x, y) + offset)
-                    .collect::<Vec<_>>()
-            };
-            let delivery_site = JobSite(delivery_sites);
-
             let haul_job = commands
                 .spawn((
                     Job,
-                    Haul::new(
-                        resource_entity,
-                        1,
-                        construction_entity,
-                        pickup_site.clone(),
-                        delivery_site,
-                    ),
+                    HaulRequest::request_entity(resource_entity, construction_entity),
                     pickup_site,
                 ))
                 .id();
@@ -228,54 +207,15 @@ struct ConstructionJob(Entity);
 struct Builder;
 
 fn materials_delivered(
-    mut commands: Commands,
-    mut construction_query: Query<
+    _commands: Commands,
+    _construction_query: Query<
         (&GlobalTransform, &mut BuildingMaterialsNeeded),
         With<WaitingForResources>,
     >,
-    mut haul_completed_event_reader: EventReader<HaulCompletedEvent>,
-    building_material_query: Query<&Name, With<BuildingMaterial>>,
+    mut job_completed_event_reader: EventReader<JobCompletedEvent>,
+    _building_material_query: Query<&Name, With<BuildingMaterial>>,
 ) {
-    for completed_haul in haul_completed_event_reader.iter() {
-        if let Some((construction_entity, (construction_transform, mut resources_needed))) =
-            completed_haul
-                .parent_job
-                .and_then(|p| construction_query.get_mut(p).ok().map(|m| (p, m)))
-        {
-            let Some(material_name) = building_material_query.get(completed_haul.item).ok() else {
-                error!("Delivered item was not a building material");
-                continue;
-            };
-
-            if let Some((_, amount_needed)) = resources_needed
-                .0
-                .iter_mut()
-                .find(|(name, _)| name == material_name)
-            {
-                *amount_needed = amount_needed.saturating_sub(1);
-            }
-            resources_needed.0.retain(|(_, amount)| *amount > 0);
-
-            commands.entity(completed_haul.item).despawn_recursive();
-
-            if resources_needed.0.is_empty() {
-                let delivery_site = JobSite(vec![Vec2::new(
-                    construction_transform.translation().x,
-                    construction_transform.translation().y,
-                )]);
-                commands
-                    .entity(construction_entity)
-                    .remove::<WaitingForResources>()
-                    .with_children(|parent| {
-                        parent.spawn((
-                            Job,
-                            ConstructionJob(construction_entity),
-                            delivery_site.clone(),
-                        ));
-                    });
-            }
-        }
-    }
+    for _job in job_completed_event_reader.iter() {}
 }
 
 #[derive(Component)]
@@ -292,10 +232,7 @@ impl Default for BuildTimer {
 
 fn start_building(
     mut commands: Commands,
-    worker_query: Query<
-        (Entity, &AssignedJob),
-        (Without<Constructing>, With<AtJobSite>, With<Builder>),
-    >,
+    worker_query: Query<(Entity, &AssignedJob), (Without<Constructing>, With<Builder>)>,
     construction_job_query: Query<&ConstructionJob>,
 ) {
     for (worker_entity, assigned_job) in &worker_query {
@@ -351,7 +288,7 @@ fn finish_building(
                 .iter()
                 .find(|cj| cj.0 == construction_site_entity)
             {
-                commands.entity(construction_job.0).insert(Complete);
+                commands.entity(construction_job.0).insert(CompletedJob);
             }
 
             construction_completed_event_writer.send(ConstructionCompletedEvent {
