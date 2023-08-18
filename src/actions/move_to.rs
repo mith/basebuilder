@@ -157,23 +157,17 @@ pub fn follow_path(
     walker_position: Vec2,
     terrain: &TerrainParams,
 ) {
+    const TOLERANCE: f32 = 3.;
     let walker_tile_pos = terrain.global_to_tile_pos(walker_position).unwrap();
-    // if within the center of the first tile in the path, remove it
     if let Some(&first_tile) = path.0.first() {
-        let is_climbing = walker_tile_pos.y != first_tile.y && walker_tile_pos.x == first_tile.x;
         let first_tile_world_pos = terrain.tile_to_global_pos(first_tile.into());
-        const TILE_SIZE: f32 = 16.;
-        if is_climbing {
-            let distance = Vec2::new(
-                first_tile_world_pos.x - walker_position.x,
-                first_tile_world_pos.y - walker_position.y,
-            );
-            if distance.length() < TILE_SIZE {
-                path.0.remove(0);
-            }
-        } else {
-            let distance = first_tile_world_pos.x - walker_position.x;
-            if distance < TILE_SIZE / 2. {
+        let distance_to_first_tile = (first_tile_world_pos - walker_position).length();
+        if distance_to_first_tile < TOLERANCE {
+            path.0.remove(0);
+        }
+        if let Some(&second_tile) = path.0.get(1) {
+            let second_tile_world_pos = terrain.tile_to_global_pos(second_tile.into());
+            if is_between(walker_position, first_tile_world_pos, second_tile_world_pos) {
                 path.0.remove(0);
             }
         }
@@ -196,4 +190,11 @@ pub fn follow_path(
     } else {
         walker.move_direction = None;
     }
+}
+
+fn is_between(point: Vec2, start: Vec2, end: Vec2) -> bool {
+    let start_to_point = point - start;
+    let start_to_end = end - start;
+    let dot = start_to_point.dot(start_to_end);
+    dot > 0. && dot < start_to_end.length_squared()
 }

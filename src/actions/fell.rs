@@ -149,7 +149,7 @@ fn at_job_site(actor_position: Vec2, job_site: &JobSite) -> bool {
     job_site
         .0
         .iter()
-        .any(|&site| site.distance(actor_position) < 6.)
+        .any(|&site| Vec2::new(site.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
 }
 
 #[derive(Component, Clone, Debug, ActionBuilder)]
