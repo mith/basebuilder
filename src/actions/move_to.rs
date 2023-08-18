@@ -172,8 +172,8 @@ pub fn follow_path(
                 path.0.remove(0);
             }
         } else {
-            let distance = Vec2::new(first_tile_world_pos.x - walker_position.x, 0.);
-            if distance.length() < TILE_SIZE {
+            let distance = first_tile_world_pos.x - walker_position.x;
+            if distance < TILE_SIZE / 2. {
                 path.0.remove(0);
             }
         }

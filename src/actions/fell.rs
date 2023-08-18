@@ -18,11 +18,11 @@ use tracing::{debug, error, info};
 use crate::{
     actions::move_to::follow_path,
     health::HealthDamageEvent,
-    labor::job::{AssignedJob, JobSite},
+    labor::job::{self, AssignedJob, JobSite},
     movement::Walker,
     pathfinding::Pathfinding,
     terrain::TerrainParams,
-    tree::TreeDestroyedEvent,
+    tree::{Tree, TreeDestroyedEvent},
     util::get_entity_position,
 };
 
@@ -55,8 +55,7 @@ fn fell(
     mut fell_action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<Fell>>,
     global_transform_query: Query<&GlobalTransform>,
     fell_target_query: Query<&FellTarget>,
-    assigned_job_query: Query<&AssignedJob>,
-    job_site_query: Query<&JobSite>,
+    tree_query: Query<&Tree>,
     mut fell_timer_query: Query<&mut FellingTimer>,
     mut tree_destroyed_event_reader: EventReader<TreeDestroyedEvent>,
 ) {
@@ -77,22 +76,24 @@ fn fell(
                     continue;
                 };
 
-                let job_site = assigned_job_query
-                    .get(actor.0)
-                    .and_then(|job| job_site_query.get(job.0))
-                    .expect("Actor should have an assigned job with a job site");
+                if let Some(_tree_destroyed_event) = tree_destroyed_event_reader
+                    .iter()
+                    .find(|event| event.tree == fell_target.0)
+                {
+                    finish_felling(&mut commands, actor, &mut action_state);
+                    continue;
+                }
 
-                if at_job_site(actor_position, job_site) {
-                    if let Ok(fell_timer) = fell_timer_query.get_mut(actor.0) {
-                        if let Some(_tree_destroyed_event) = tree_destroyed_event_reader
-                            .iter()
-                            .find(|event| event.tree == fell_timer.tree_entity)
-                        {
-                            info!("Felling finished");
-                            commands.entity(actor.0).remove::<FellingTimer>();
-                            *action_state = ActionState::Success;
-                        }
-                    } else {
+                if tree_query.get(fell_target.0).is_err() {
+                    info!("Tree no longer exists");
+                    *action_state = ActionState::Failure;
+                    continue;
+                }
+
+                let job_site = fell_job_site(fell_target.0, &global_transform_query);
+
+                if at_job_site(actor_position, &job_site) {
+                    if fell_timer_query.get(actor.0).is_err() {
                         info!("Felling started");
                         commands.entity(actor.0).insert(FellingTimer {
                             tree_entity: fell_target.0,
@@ -101,7 +102,10 @@ fn fell(
                     }
                 } else {
                     info!("Too far away to fell");
-                    commands.entity(actor.0).remove::<FellingTimer>();
+                    commands
+                        .entity(actor.0)
+                        .remove::<FellingTimer>()
+                        .remove::<FellTarget>();
                     *action_state = ActionState::Failure;
                 }
             }
@@ -113,6 +117,15 @@ fn fell(
             _ => {}
         }
     }
+}
+
+fn finish_felling(commands: &mut Commands, actor: &Actor, action_state: &mut ActionState) {
+    info!("Felling finished");
+    commands
+        .entity(actor.0)
+        .remove::<FellingTimer>()
+        .remove::<FellTarget>();
+    *action_state = ActionState::Success;
 }
 
 fn felling_timer(
@@ -142,12 +155,22 @@ fn at_job_site(actor_position: Vec2, job_site: &JobSite) -> bool {
 #[derive(Component, Clone, Debug, ActionBuilder)]
 struct MoveToTree;
 
+fn fell_job_site(target: Entity, global_transform_query: &Query<&GlobalTransform>) -> JobSite {
+    let target_position = global_transform_query
+        .get(target)
+        .unwrap()
+        .translation()
+        .xy();
+    JobSite(vec![
+        target_position - Vec2::new(16., 0.),
+        target_position + Vec2::new(16., 0.),
+    ])
+}
+
 fn move_to_tree(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<MoveToTree>>,
     global_transform_query: Query<&GlobalTransform>,
-    assigned_job_query: Query<&AssignedJob>,
-
-    fell_jobs_query: Query<&JobSite>,
+    fell_target_query: Query<&FellTarget>,
     pathfinding: Pathfinding,
     terrain: TerrainParams,
     mut walker_query: Query<&mut Walker>,
@@ -166,14 +189,14 @@ fn move_to_tree(
                     .unwrap()
                     .translation()
                     .xy();
-
-                let job_site = assigned_job_query
-                    .get(actor.0)
-                    .and_then(|assigned_job| fell_jobs_query.get(assigned_job.0))
-                    .expect("Actor should have a FellJob assigned");
-
+                let Some(fell_target) = fell_target_query.get(actor.0).ok() else {
+                    error!("No fell target");
+                    *action_state = ActionState::Failure;
+                    continue;
+                };
+                let job_site = fell_job_site(fell_target.0, &global_transform_query);
                 // if we're close to a job site, we're done
-                if at_job_site(actor_position, job_site) {
+                if at_job_site(actor_position, &job_site) {
                     info!("Arrived at tree");
                     let mut walker = walker_query
                         .get_mut(actor.0)

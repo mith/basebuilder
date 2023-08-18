@@ -40,7 +40,6 @@ impl Plugin for WorkPlugin {
                 pick_job::<PickFellJob>,
                 check_job_canceled,
                 set_fell_target,
-                remove_fell_target,
                 unassign_worker,
                 complete_job::<CompleteFellJob>,
             )
@@ -139,7 +138,6 @@ impl CompleteJob for CompleteFellJob {
 struct CompleteFellJob;
 
 fn complete_job<TCompleteJobAction: std::fmt::Debug + Component + CompleteJob>(
-    _commands: Commands,
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<TCompleteJobAction>>,
     assigned_job_query: Query<&AssignedJob>,
     mut job_manager_params: JobManagerParams,
@@ -204,36 +202,6 @@ fn set_fell_target(
             }
             ActionState::Cancelled => {
                 info!("Setting fell target cancelled");
-                *action_state = ActionState::Failure;
-            }
-            _ => {}
-        }
-    }
-}
-
-#[derive(Component, Debug, Clone, ActionBuilder)]
-struct RemoveFellTarget;
-
-fn remove_fell_target(
-    mut commands: Commands,
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<RemoveFellTarget>>,
-) {
-    for (actor, mut action_state, span) in &mut action_query {
-        let _guard = span.span().enter();
-
-        match *action_state {
-            ActionState::Requested => {
-                info!("Removing fell target");
-                *action_state = ActionState::Executing;
-            }
-            ActionState::Executing => {
-                // Remove the FellTarget component from the actor
-                info!("Removing fell target");
-                commands.entity(actor.0).remove::<FellTarget>();
-                *action_state = ActionState::Success;
-            }
-            ActionState::Cancelled => {
-                info!("Removing fell target cancelled");
                 *action_state = ActionState::Failure;
             }
             _ => {}
@@ -368,7 +336,6 @@ fn do_fell_job() -> StepsBuilder {
         .label("fell")
         .step(SetFellTarget)
         .step(fell_tree())
-        .step(RemoveFellTarget)
         .step(CompleteFellJob);
 
     let do_job = Concurrently::build()

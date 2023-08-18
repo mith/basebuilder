@@ -106,14 +106,6 @@ pub fn can_stand_or_climb(
     climbable_map: Option<&ClimbableMap>,
     tile_pos: TilePos,
 ) -> bool {
-    let tile_is_empty = terrain_data
-        .get_tile(tile_pos.into())
-        .map_or(false, |tile| tile == 0);
-
-    if !tile_is_empty {
-        return false;
-    }
-
     let can_climb_in_tile = can_climb(climbable_map, tile_pos);
 
     let can_stand_in_tile = can_stand(terrain_data, tile_pos);
