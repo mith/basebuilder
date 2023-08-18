@@ -14,24 +14,28 @@ use big_brain::{
 };
 use tracing::{debug, info};
 
-use crate::{actions::fell::FellTarget, labor::job::AssignedJob, tree::Tree};
+use crate::{
+    actions::fell::FellTarget,
+    labor::{chop_tree::FellingJob, job::AssignedJob},
+    tree::Tree,
+};
 
 use super::{
     fell::fell_tree,
     work::{complete_job, pick_job, CheckJobCanceled, CompleteJob, PickJob, UnassignWorker},
 };
-pub struct DoFellJobPlugin;
+pub struct DoFellingJobPlugin;
 
-impl Plugin for DoFellJobPlugin {
+impl Plugin for DoFellingJobPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PreUpdate, (feller_scorer).in_set(BigBrainSet::Scorers))
             .add_systems(
                 PreUpdate,
                 (
-                    pick_job::<PickFellJob>,
+                    pick_job::<PickFellingJob>,
                     set_fell_target,
                     check_tree_exists,
-                    complete_job::<CompleteFellJob>,
+                    complete_job::<CompleteFellingJob>,
                 )
                     .in_set(BigBrainSet::Actions),
             );
@@ -44,7 +48,7 @@ pub fn do_fell_job() -> StepsBuilder {
         .label("fell")
         .step(SetFellTarget)
         .step(fell_tree())
-        .step(CompleteFellJob);
+        .step(CompleteFellingJob);
 
     let do_job = Concurrently::build()
         .mode(ConcurrentMode::Race)
@@ -55,7 +59,7 @@ pub fn do_fell_job() -> StepsBuilder {
 
     Steps::build()
         .label("do_fell_job")
-        .step(PickFellJob)
+        .step(PickFellingJob)
         .step(do_job)
         .step(UnassignWorker)
 }
@@ -67,7 +71,7 @@ fn set_fell_target(
     mut commands: Commands,
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<SetFellTarget>>,
     assigned_job_query: Query<&AssignedJob>,
-    fell_job_query: Query<&FellJob>,
+    fell_job_query: Query<&FellingJob>,
 ) {
     for (actor, mut action_state, span) in &mut action_query {
         let _guard = span.span().enter();
@@ -87,7 +91,7 @@ fn set_fell_target(
                 info!(job=?assigned_fell_job, "Setting fell target");
                 commands
                     .entity(actor.0)
-                    .insert(FellTarget(assigned_fell_job.tree));
+                    .insert(FellTarget(assigned_fell_job.0));
                 *action_state = ActionState::Success;
             }
             ActionState::Cancelled => {
@@ -102,29 +106,25 @@ fn set_fell_target(
 #[derive(Component, Clone, Debug, ScorerBuilder)]
 pub struct Feller;
 
-#[derive(Component, Debug)]
-pub struct FellJob {
-    pub tree: Entity,
-}
-impl PickJob for PickFellJob {
-    type Job = FellJob;
+impl PickJob for PickFellingJob {
+    type Job = FellingJob;
 }
 
 #[derive(Component, Debug, Clone, ActionBuilder)]
-struct PickFellJob;
+struct PickFellingJob;
 
-impl CompleteJob for CompleteFellJob {
-    type Job = FellJob;
+impl CompleteJob for CompleteFellingJob {
+    type Job = FellingJob;
 }
 #[derive(Component, Debug, Clone, ActionBuilder)]
-struct CompleteFellJob;
+struct CompleteFellingJob;
 
 #[derive(Resource, Debug)]
-struct FellJobs(HashSet<FellJob>);
+struct FellingJobs(HashSet<FellingJob>);
 
 fn feller_scorer(
     mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<Feller>>,
-    fell_jobs_query: Query<&FellJob>,
+    fell_jobs_query: Query<&FellingJob>,
     _global_transform_query: Query<&GlobalTransform>,
 ) {
     for (_actor, mut score, span) in &mut actor_query {
@@ -144,7 +144,7 @@ fn feller_scorer(
 
         // let mut scores = vec![];
 
-        // for FellJob { tree } in &fell_jobs_query {
+        // for FellingJob { tree } in &fell_jobs_query {
         //     let tree_position = global_transform_query
         //         .get(*tree)
         //         .unwrap()
@@ -177,7 +177,7 @@ struct CheckTreeExists;
 fn check_tree_exists(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<CheckTreeExists>>,
     assigned_job_query: Query<&AssignedJob>,
-    fell_job_query: Query<&FellJob>,
+    fell_job_query: Query<&FellingJob>,
     tree_query: Query<&Tree>,
 ) {
     for (actor, mut action_state, span) in &mut action_query {
@@ -191,7 +191,7 @@ fn check_tree_exists(
             ActionState::Executing => {
                 // Check if the target tree still exists
                 if let Ok(AssignedJob(job_entity)) = assigned_job_query.get(actor.0) {
-                    if let Ok(FellJob { tree }) = fell_job_query.get(*job_entity) {
+                    if let Ok(FellingJob(tree)) = fell_job_query.get(*job_entity) {
                         if tree_query.get(*tree).is_err() {
                             info!("Tree does not exist");
                             *action_state = ActionState::Success;

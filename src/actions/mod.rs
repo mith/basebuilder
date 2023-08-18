@@ -20,7 +20,7 @@ impl Plugin for ActionsPlugin {
             fell::FellPlugin,
             move_to::MoveToPlugin,
             work::WorkPlugin,
-            do_fell_job::DoFellJobPlugin,
+            do_fell_job::DoFellingJobPlugin,
             meander::MeanderPlugin,
         ));
     }

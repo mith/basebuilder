@@ -3,7 +3,6 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
-    actions::do_fell_job::FellJob,
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
     labor::job::{all_workers_eligible, Job, JobSite},
@@ -31,7 +30,7 @@ impl Plugin for ChopTreePlugin {
 }
 
 #[derive(Component, Debug, Clone, Reflect)]
-pub struct FellingJob(Entity);
+pub struct FellingJob(pub Entity);
 
 #[derive(States, Default, Reflect, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum FellingToolState {
@@ -73,7 +72,7 @@ fn mark_trees(
                 let job_entity = commands
                     .spawn((
                         Job,
-                        FellJob { tree: tree_entity },
+                        FellingJob(tree_entity),
                         job_site.clone(),
                     ))
                     .id();
