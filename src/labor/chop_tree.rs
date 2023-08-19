@@ -5,7 +5,7 @@ use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 use crate::{
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
-    labor::job::{all_workers_eligible, Job, JobSite},
+    labor::job::{all_workers_eligible, CanceledJob, Job, JobSite},
     tree::{Tree, TreeDestroyedEvent, TREE_COLLISION_GROUP},
 };
 
@@ -23,6 +23,7 @@ impl Plugin for ChopTreePlugin {
                 (
                     mark_trees.run_if(state_exists_and_equals(FellingToolState::Designating)),
                     all_workers_eligible::<FellingJob>,
+                    cancel_felling_jobs,
                 )
                     .before(JobAssignmentSet),
             );
@@ -89,4 +90,17 @@ pub struct FellingCompleteEvent {
     pub parent_job: Option<Entity>,
     pub worker: Entity,
     pub tree: Entity,
+}
+
+fn cancel_felling_jobs(
+    mut job_manager_params: JobManagerParams,
+    mut job_query: Query<(Entity, &FellingJob), With<Job>>,
+    tree_query: Query<&Tree>,
+) {
+    for (job_entity, felling_job) in &mut job_query {
+        if tree_query.get(felling_job.0).is_err() {
+            info!(job = ?job_entity, tree = ?felling_job.0, "Cancelling felling job because tree does not exist");
+            job_manager_params.cancel_job(job_entity);
+        }
+    }
 }

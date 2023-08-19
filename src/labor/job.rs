@@ -64,6 +64,9 @@ pub struct JobCompletedEvent {
 #[derive(Component)]
 pub struct CompletedJob;
 
+#[derive(Component)]
+pub struct CanceledJob;
+
 #[derive(Component, Debug, Reflect)]
 pub struct EligibleWorkers(pub HashSet<Entity>);
 
@@ -102,6 +105,13 @@ impl JobManagerParams<'_, '_> {
             job_entity,
             worker_entity,
         });
+    }
+
+    pub fn cancel_job(&mut self, job_entity: Entity) {
+        self.commands
+            .entity(job_entity)
+            .remove::<Job>()
+            .insert(CanceledJob);
     }
 }
 

@@ -16,7 +16,7 @@ use crate::{
     actions::do_fell_job::{do_fell_job, Feller},
     labor::{
         chop_tree::FellingJob,
-        job::{AssignedJob, AssignedWorker, Job, JobManagerParams},
+        job::{AssignedJob, AssignedWorker, CanceledJob, Job, JobManagerParams},
     },
 };
 
@@ -171,6 +171,7 @@ pub struct CheckJobCanceled;
 fn check_job_canceled(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<CheckJobCanceled>>,
     assigned_job_query: Query<&AssignedJob>,
+    canceled_jobs_query: Query<&CanceledJob>,
 ) {
     for (actor, mut action_state, span) in &mut action_query {
         let _guard = span.span().enter();
@@ -182,11 +183,13 @@ fn check_job_canceled(
             }
             ActionState::Executing => {
                 // Check if the job has been canceled
-                if assigned_job_query.get(actor.0).is_err() {
-                    info!("Job canceled");
-                    *action_state = ActionState::Cancelled;
+                if let Ok(AssignedJob(job_entity)) = assigned_job_query.get(actor.0) {
+                    if canceled_jobs_query.get(*job_entity).is_ok() {
+                        info!("Job is canceled");
+                        *action_state = ActionState::Success;
+                    }
                 } else {
-                    debug!("Job not canceled");
+                    *action_state = ActionState::Cancelled;
                 }
             }
             ActionState::Cancelled => {
