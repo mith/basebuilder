@@ -13,9 +13,13 @@ use big_brain::{
 use tracing::{debug, info};
 
 use crate::{
-    actions::do_fell_job::{do_fell_job, Feller},
+    actions::{
+        do_dig_job::{do_dig_job, Digger},
+        do_fell_job::{do_fell_job, Feller},
+    },
     labor::{
         chop_tree::FellingJob,
+        dig_tile::DigJob,
         job::{AssignedJob, AssignedWorker, CanceledJob, Job, JobManagerParams},
     },
 };
@@ -27,7 +31,12 @@ impl Plugin for WorkPlugin {
         app.add_systems(PreUpdate, (jobs_available).in_set(BigBrainSet::Scorers))
             .add_systems(
                 PreUpdate,
-                (check_job_canceled, pick_job::<FellingJob>, complete_job)
+                (
+                    check_job_canceled,
+                    pick_job::<FellingJob>,
+                    pick_job::<DigJob>,
+                    complete_job,
+                )
                     .in_set(BigBrainSet::Actions),
             );
     }
@@ -39,6 +48,7 @@ pub fn build_worker_thinker() -> ThinkerBuilder {
         .label("worker")
         .picker(FirstToScore::new(0.8))
         .when(Feller, do_job::<FellingJob, _>(do_fell_job()))
+        .when(Digger, do_job::<DigJob, _>(do_dig_job()))
 }
 
 fn do_job<T: Component + Debug, A: ActionBuilder + 'static>(job_steps: A) -> StepsBuilder {

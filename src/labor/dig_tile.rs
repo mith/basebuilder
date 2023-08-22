@@ -33,9 +33,6 @@ impl Plugin for DigPlugin {
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct DigJob(pub Entity);
 
-#[derive(Component, Default, Debug)]
-pub struct Digger;
-
 #[derive(States, Default, Reflect, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum DigToolState {
     #[default]
@@ -77,7 +74,7 @@ fn designate_dig(
                     ]),
                 ))
                 .id();
-            info!(job = ?job_entity, tile = ?tile_entity, "Designated dig job");
+            info!(job=?job_entity, tile=?tile_entity, tile_pos=?tile_pos,  "Designated dig job");
         }
     }
 }

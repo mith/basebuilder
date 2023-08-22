@@ -26,6 +26,7 @@ pub struct TerrainParams<'w, 's> {
     >,
     pub terrain_data_query: Query<'w, 's, &'static TerrainData, With<Terrain>>,
     pub tile_storage: Query<'w, 's, &'static TileStorage, With<Terrain>>,
+    pub tile_pos_query: Query<'w, 's, &'static TilePos>,
 }
 
 impl TerrainParams<'_, '_> {
@@ -63,5 +64,9 @@ impl TerrainParams<'_, '_> {
     pub fn get_tile_entity(&self, tile_pos: TilePos) -> Option<Entity> {
         let tile_storage = self.tile_storage.single();
         tile_storage.get(&tile_pos)
+    }
+
+    pub fn get_entity_tile_pos(&self, entity: Entity) -> Option<TilePos> {
+        self.tile_pos_query.get(entity).ok().copied()
     }
 }
