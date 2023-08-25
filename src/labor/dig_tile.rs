@@ -2,9 +2,10 @@ use bevy::prelude::*;
 use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::{
+    actions::action_area::ActionArea,
     designation_layer::Designated,
     hovered_tile::HoveredTile,
-    labor::job::{all_workers_eligible, Job, JobSite},
+    labor::job::{all_workers_eligible, Job},
     terrain::TerrainParams,
 };
 
@@ -56,7 +57,7 @@ fn designate_dig(
                 .spawn((
                     Job,
                     DigJob(tile_entity),
-                    JobSite(vec![
+                    ActionArea(vec![
                         // West
                         Vec2::new(x - 16., y),
                         // East
@@ -85,11 +86,11 @@ struct AwaitingDig(pub Entity);
 fn schedule_dig_action(
     _commands: Commands,
     dig_job_query: Query<
-        (Entity, &DigJob, &AssignedWorker, &JobSite),
+        (Entity, &DigJob, &AssignedWorker, &ActionArea),
         (Without<AwaitingDig>, Without<CompletedJob>),
     >,
 ) {
-    for (_job_entity, DigJob(_tile_entity), AssignedWorker(_worker_entity), _job_site) in
+    for (_job_entity, DigJob(_tile_entity), AssignedWorker(_worker_entity), _action_area) in
         &mut dig_job_query.iter()
     {}
 }

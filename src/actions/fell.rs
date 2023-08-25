@@ -2,7 +2,7 @@ use bevy::{
     math::Vec3Swizzles,
     prelude::{
         App, Commands, Component, Entity, EventReader, EventWriter, GlobalTransform,
-        IntoSystemConfigs, Plugin, PreUpdate, Query, Res, Update, Vec2, With,
+        IntoSystemConfigs, Plugin, PreUpdate, Query, Res, Update, Vec2, With, World,
     },
     reflect::Reflect,
     time::{Time, Timer, TimerMode},
@@ -16,15 +16,17 @@ use big_brain::{
 use tracing::{debug, error, info};
 
 use crate::{
+    actions::action_area::ActionArea,
     actions::move_to::follow_path,
     health::HealthDamageEvent,
-    labor::job::JobSite,
     movement::Walker,
     pathfinding::Pathfinding,
     terrain::TerrainParams,
     tree::{Tree, TreeDestroyedEvent},
     util::get_entity_position,
 };
+
+use super::action_area::HasActionArea;
 
 pub struct FellPlugin;
 
@@ -38,33 +40,61 @@ impl Plugin for FellPlugin {
     }
 }
 
-#[derive(Component, Clone, Debug, Reflect, ActionBuilder)]
-pub struct Fell;
+#[derive(Component, Debug, Reflect)]
+pub struct Fell(pub Entity);
+
+#[derive(Debug, Reflect)]
+pub struct FellActionBuilder;
+
+impl ActionBuilder for FellActionBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, actor: Entity) {
+        cmd.entity(actor).add(move |id: Entity, world: &mut World| {
+            let FellTarget(tree) = world
+                .get::<FellTarget>(id)
+                .expect("Actor should have a fell target")
+                .to_owned();
+
+            world.entity_mut(action).insert(Fell(tree));
+        });
+    }
+}
+
+impl HasActionArea for Fell {
+    fn action_area(action_pos: Vec2) -> ActionArea {
+        ActionArea(vec![
+            action_pos - Vec2::new(16., 0.),
+            action_pos + Vec2::new(16., 0.),
+        ])
+    }
+
+    fn action_pos(&self, global_transform_query: &Query<&GlobalTransform>) -> Option<Vec2> {
+        global_transform_query
+            .get(self.0)
+            .map(|tree_transform| tree_transform.translation().xy())
+            .ok()
+    }
+}
 
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct FellTarget(pub Entity);
-fn at_job_site(actor_position: Vec2, job_site: &JobSite) -> bool {
-    // if we're close to a job site, we're done
-    job_site
+
+fn at_action_area(actor_position: Vec2, action_area: &ActionArea) -> bool {
+    // if we're close to a action area, we're done
+    action_area
         .0
         .iter()
-        .any(|&site| Vec2::new(site.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
+        .any(|&tile| Vec2::new(tile.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
 }
 
-#[derive(Component, Clone, Debug, ActionBuilder)]
-struct MoveToTree;
-
-fn fell_job_site(target: Entity, global_transform_query: &Query<&GlobalTransform>) -> JobSite {
-    let target_position = global_transform_query
-        .get(target)
-        .unwrap()
-        .translation()
-        .xy();
-    JobSite(vec![
+pub fn fell_action_area(target_position: Vec2) -> ActionArea {
+    ActionArea(vec![
         target_position - Vec2::new(16., 0.),
         target_position + Vec2::new(16., 0.),
     ])
 }
+
+#[derive(Component, Clone, Debug, ActionBuilder)]
+struct MoveToTree;
 
 fn move_to_tree(
     mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<MoveToTree>>,
@@ -99,9 +129,14 @@ fn move_to_tree(
                     *action_state = ActionState::Cancelled;
                     continue;
                 }
-                let job_site = fell_job_site(fell_target.0, &global_transform_query);
-                // if we're close to a job site, we're done
-                if at_job_site(actor_position, &job_site) {
+                let tree_global_pos = global_transform_query
+                    .get(fell_target.0)
+                    .expect("Tree should have a global transform")
+                    .translation()
+                    .xy();
+                let action_area = fell_action_area(tree_global_pos);
+                // if we're close to a action area, we're done
+                if at_action_area(actor_position, &action_area) {
                     info!("Arrived at tree");
                     let mut walker = walker_query
                         .get_mut(actor.0)
@@ -111,10 +146,10 @@ fn move_to_tree(
                     *action_state = ActionState::Success;
                 } else {
                     debug!("Moving to tree");
-                    let path = job_site
+                    let path = action_area
                         .0
                         .iter()
-                        .find_map(|&site| pathfinding.find_path(actor_position, site));
+                        .find_map(|&tile| pathfinding.find_path(actor_position, tile));
                     if let Some(path) = path {
                         let mut walker = walker_query
                             .get_mut(actor.0)
@@ -123,7 +158,7 @@ fn move_to_tree(
                         debug!("Following path to tree");
                         follow_path(path, &mut walker, actor_position, &terrain);
                     } else {
-                        error!(actor_position=?actor_position, job_site=?job_site, "No path found to tree");
+                        error!(actor_position=?actor_position, action_area=?action_area, "No path found to tree");
                         *action_state = ActionState::Failure;
                     }
                 }
@@ -189,9 +224,15 @@ fn fell(
                     continue;
                 }
 
-                let job_site = fell_job_site(fell_target.0, &global_transform_query);
+                let tree_global_pos = global_transform_query
+                    .get(fell_target.0)
+                    .expect("Tree should have a global transform")
+                    .translation()
+                    .xy();
 
-                if at_job_site(actor_position, &job_site) {
+                let action_area = fell_action_area(tree_global_pos);
+
+                if at_action_area(actor_position, &action_area) {
                     if fell_timer_query.get(actor.0).is_err() {
                         info!("Felling started");
                         commands.entity(actor.0).insert(FellingTimer {
@@ -244,5 +285,8 @@ fn felling_timer(
 }
 
 pub fn fell_tree() -> StepsBuilder {
-    Steps::build().label("feller").step(MoveToTree).step(Fell)
+    Steps::build()
+        .label("feller")
+        .step(MoveToTree)
+        .step(FellActionBuilder)
 }

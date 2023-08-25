@@ -10,6 +10,8 @@ use bevy::{
 };
 use tracing::info;
 
+use crate::actions::action_area::ActionArea;
+
 pub struct JobPlugin;
 
 impl Plugin for JobPlugin {
@@ -20,7 +22,7 @@ impl Plugin for JobPlugin {
             .register_type::<AssignedWorker>()
             .register_type::<BlacklistedWorkers>()
             .register_type::<EligibleWorkers>()
-            .register_type::<JobSite>()
+            .register_type::<ActionArea>()
             .register_type::<JobAssignedEvent>()
             .register_type::<JobCompletedEvent>();
     }
@@ -45,9 +47,6 @@ pub struct AssignedWorker(pub Entity);
 
 #[derive(Component, Debug, Reflect)]
 pub struct BlacklistedWorkers(pub HashMap<Entity, Timer>);
-
-#[derive(Component, Clone, Reflect, Debug)]
-pub struct JobSite(pub Vec<Vec2>);
 
 #[derive(Event, Debug, Reflect)]
 pub struct JobAssignedEvent {

@@ -14,11 +14,11 @@ use big_brain::{
     thinker::{ActionSpan, Actor},
     BigBrainSet,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use crate::{
+    actions::action_area::ActionArea,
     actions::move_to::follow_path,
-    labor::job::JobSite,
     movement::Walker,
     pathfinding::Pathfinding,
     terrain::{TerrainParams, TerrainSet, TileDamageEvent, TileDestroyedEvent},
@@ -45,11 +45,11 @@ pub struct DigTarget(pub Entity);
 #[derive(Component, Clone, Debug, ActionBuilder)]
 struct MoveTotile;
 
-fn dig_job_site(tile_pos: TilePos, terrain: &TerrainParams) -> JobSite {
+fn dig_work_area(tile_pos: TilePos, terrain: &TerrainParams) -> ActionArea {
     let tile_global_pos = terrain.tile_to_global_pos(tile_pos);
     // All sites around the target tile
     // NW, NE, E, SE, S, SW, W
-    JobSite(vec![
+    ActionArea(vec![
         tile_global_pos + Vec2::new(-1., 1.) * 16.,
         tile_global_pos + Vec2::new(1., 1.) * 16.,
         tile_global_pos + Vec2::new(1., 0.) * 16.,
@@ -60,9 +60,9 @@ fn dig_job_site(tile_pos: TilePos, terrain: &TerrainParams) -> JobSite {
     ])
 }
 
-fn at_job_site(actor_position: Vec2, job_site: &JobSite) -> bool {
+fn at_work_area(actor_position: Vec2, work_area: &ActionArea) -> bool {
     // if we're close to a job site, we're done
-    job_site
+    work_area
         .0
         .iter()
         .any(|&site| Vec2::new(site.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
@@ -106,9 +106,9 @@ fn move_to_tile(
                     *action_state = ActionState::Failure;
                     continue;
                 };
-                let job_site = dig_job_site(tile_pos, &terrain);
+                let work_area = dig_work_area(tile_pos, &terrain);
                 // if we're close to a job site, we're done
-                if at_job_site(actor_position, &job_site) {
+                if at_work_area(actor_position, &work_area) {
                     info!("Arrived at tile");
                     let mut walker = walker_query
                         .get_mut(actor.0)
@@ -118,7 +118,7 @@ fn move_to_tile(
                     *action_state = ActionState::Success;
                 } else {
                     debug!("Moving to tile");
-                    let path = job_site
+                    let path = work_area
                         .0
                         .iter()
                         .find_map(|&site| pathfinding.find_path(actor_position, site));
@@ -130,7 +130,7 @@ fn move_to_tile(
                         debug!("Following path to tile");
                         follow_path(path, &mut walker, actor_position, &terrain);
                     } else {
-                        error!(actor_position=?actor_position, job_site=?job_site, "No path found to tile");
+                        error!(actor_position=?actor_position, work_area=?work_area, "No path found to tile");
                         *action_state = ActionState::Failure;
                     }
                 }
@@ -175,7 +175,7 @@ fn dig(
                 *action_state = ActionState::Executing;
             }
             ActionState::Executing => {
-                info!("Digging");
+                trace!("Digging");
                 let Ok(dig_target) = dig_target_query.get(actor.0) else {
                     info!("No dig target");
                     *action_state = ActionState::Cancelled;
@@ -197,9 +197,9 @@ fn dig(
                     *action_state = ActionState::Failure;
                     continue;
                 };
-                let job_site = dig_job_site(tile_pos, &terrain);
+                let work_area = dig_work_area(tile_pos, &terrain);
                 // if we're close to a job site, we're done
-                if at_job_site(actor_position, &job_site) {
+                if at_work_area(actor_position, &work_area) {
                     if let Ok(dig_timer) = dig_timer_query.get_mut(actor.0) {
                         if let Some(_tile_destroyed_event) = tile_destroyed_event_reader
                             .iter()

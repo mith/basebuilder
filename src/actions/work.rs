@@ -6,7 +6,10 @@ use bevy::prelude::{
 use big_brain::{
     actions::StepsBuilder,
     prelude::{ActionBuilder, ActionState, FirstToScore, ScorerBuilder, Steps},
-    scorers::Score,
+    scorers::{
+        AllOrNothing, AllOrNothingBuilder, ProductOfScorers, Score, WinningScorer,
+        WinningScorerBuilder,
+    },
     thinker::{ActionSpan, Actor, ScorerSpan, Thinker, ThinkerBuilder},
     BigBrainSet,
 };
@@ -14,8 +17,9 @@ use tracing::{debug, info};
 
 use crate::{
     actions::{
+        action_area::{ActionAreaReachable, ActionAreaReachableBuilder},
         do_dig_job::{do_dig_job, Digger},
-        do_fell_job::{do_fell_job, Feller},
+        do_fell_job::{do_fell_job, FellJobReachable},
     },
     labor::{
         chop_tree::FellingJob,
@@ -28,36 +32,57 @@ pub struct WorkPlugin;
 
 impl Plugin for WorkPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, (jobs_available).in_set(BigBrainSet::Scorers))
-            .add_systems(
-                PreUpdate,
-                (
-                    check_job_canceled,
-                    pick_job::<FellingJob>,
-                    pick_job::<DigJob>,
-                    complete_job,
-                )
-                    .in_set(BigBrainSet::Actions),
-            );
+        app.add_systems(
+            PreUpdate,
+            (
+                jobs_available,
+                job_type_available::<DigJob>,
+                job_type_available::<FellingJob>,
+                currently_assigned_job,
+            )
+                .in_set(BigBrainSet::Scorers),
+        )
+        .add_systems(
+            PreUpdate,
+            (
+                check_job_canceled,
+                pick_job::<FellingJob>,
+                pick_job::<DigJob>,
+                complete_job,
+            )
+                .in_set(BigBrainSet::Actions),
+        );
     }
 }
 
-pub fn build_worker_thinker() -> ThinkerBuilder {
+pub fn worker_thinker_builder() -> ThinkerBuilder {
     info!("Building worker thinker");
     Thinker::build()
         .label("worker")
         .picker(FirstToScore::new(0.8))
-        .when(Feller, do_job::<FellingJob, _>(do_fell_job()))
+        // .when(AssignedJobUnreachable, CancelJobAssignment)
+        .when(
+            ActionAreaReachable::<FellingJob>::build(),
+            do_job::<FellingJob, _>(do_fell_job()),
+        )
         .when(Digger, do_job::<DigJob, _>(do_dig_job()))
 }
 
 fn do_job<T: Component + Debug, A: ActionBuilder + 'static>(job_steps: A) -> StepsBuilder {
-    info!("Building do_job");
+    info!("Building do_job action");
     Steps::build()
         .label("do_job")
         .step(PickJobBuilder::<T>(PhantomData))
         .step(job_steps)
         .step(CompleteJob)
+}
+
+pub fn worker_scorer_builder() -> WinningScorerBuilder {
+    info!("Building worker scorer");
+    WinningScorer::build(0.8)
+        .label("worker")
+        .push(JobsAvailable)
+        .push(CurrentlyAssignedJob)
 }
 
 #[derive(Component, Debug, Clone, ScorerBuilder)]
@@ -66,13 +91,41 @@ pub struct JobsAvailable;
 fn jobs_available(
     mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<JobsAvailable>>,
     unassigned_jobs_query: Query<Entity, (With<Job>, Without<AssignedWorker>)>,
+) {
+    let any_jobs_available = !unassigned_jobs_query.is_empty();
+    for (_actor, mut score, _span) in &mut actor_query {
+        if any_jobs_available {
+            score.set(1.0);
+        } else {
+            score.set(0.0);
+        }
+    }
+}
+
+#[derive(Component, Debug, Clone, ScorerBuilder)]
+pub struct CurrentlyAssignedJob;
+
+fn currently_assigned_job(
+    mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<CurrentlyAssignedJob>>,
     assigned_job_query: Query<&AssignedJob>,
 ) {
-    let any_jobs_available = unassigned_jobs_query.iter().next().is_some();
     for (actor, mut score, _span) in &mut actor_query {
-        // Check if the actor is currently assigned a job or if there are unassigned jobs availabe
-        let currently_assigned_job = assigned_job_query.get(actor.0).is_ok();
-        if any_jobs_available || currently_assigned_job {
+        if assigned_job_query.contains(actor.0) {
+            score.set(1.0);
+        } else {
+            score.set(0.0);
+        }
+    }
+}
+
+fn job_type_available<T>(
+    mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<JobsAvailable>>,
+    job_query: Query<Entity, (With<T>, Without<AssignedWorker>)>,
+) where
+    T: Component,
+{
+    for (_actor, mut score, _span) in &mut actor_query {
+        if !job_query.is_empty() {
             score.set(1.0);
         } else {
             score.set(0.0);

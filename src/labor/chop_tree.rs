@@ -3,9 +3,10 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
+    actions::action_area::{ActionArea, HasActionArea},
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
-    labor::job::{all_workers_eligible, CanceledJob, Job, JobSite},
+    labor::job::{all_workers_eligible, CanceledJob, Job},
     tree::{Tree, TreeDestroyedEvent, TREE_COLLISION_GROUP},
 };
 
@@ -32,6 +33,22 @@ impl Plugin for ChopTreePlugin {
 
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct FellingJob(pub Entity);
+
+impl HasActionArea for FellingJob {
+    fn action_area(action_pos: Vec2) -> ActionArea {
+        ActionArea(vec![
+            action_pos - Vec2::new(16., 0.),
+            action_pos + Vec2::new(16., 0.),
+        ])
+    }
+
+    fn action_pos(&self, global_transform_query: &Query<&GlobalTransform>) -> Option<Vec2> {
+        global_transform_query
+            .get(self.0)
+            .map(|tree_transform| tree_transform.translation().xy())
+            .ok()
+    }
+}
 
 #[derive(States, Default, Reflect, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum FellingToolState {
@@ -66,7 +83,7 @@ fn mark_trees(
                 };
                 let tree_translation = tree_transform.translation().xy();
                 commands.entity(tree_entity).insert(Designated);
-                let job_site = JobSite(vec![
+                let action_area = ActionArea(vec![
                             Vec2::new(tree_translation.x - 16., tree_translation.y),
                             Vec2::new(tree_translation.x + 16., tree_translation.y),
                         ]);
@@ -74,10 +91,10 @@ fn mark_trees(
                     .spawn((
                         Job,
                         FellingJob(tree_entity),
-                        job_site.clone(),
+                        action_area.clone(),
                     ))
                     .id();
-                info!(job = ?job_entity, tree=?tree_entity, job_site=?job_site, "Marked tree for felling");
+                info!(job = ?job_entity, tree=?tree_entity, action_area=?action_area, "Marked tree for felling");
                 false
             },
         );

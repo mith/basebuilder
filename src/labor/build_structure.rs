@@ -5,10 +5,11 @@ use bevy_ecs_tilemap::prelude::TilemapGridSize;
 use bevy_rapier2d::prelude::Group;
 
 use crate::{
+    actions::action_area::ActionArea,
     building_material::{BuildingMaterial, BuildingMaterialLocator, Reserved},
     cursor_position::LastCursorPosition,
     hovered_tile::{HoveredTile, HoveredTileSet},
-    labor::job::{all_workers_eligible, AssignedJob, Job, JobSite, Worker},
+    labor::job::{all_workers_eligible, AssignedJob, Job, Worker},
     ladder::spawn_ladder,
     terrain::Terrain,
 };
@@ -177,16 +178,16 @@ fn designate_building_materials(
             let resource_transform = building_material_query
                 .get(resource_entity)
                 .expect("Resource entity should have a transform");
-            let pickup_site = {
+            let pickup_area = {
                 let x = resource_transform.translation().x;
                 let y = resource_transform.translation().y;
-                JobSite(vec![Vec2::new(x, y)])
+                ActionArea(vec![Vec2::new(x, y)])
             };
             let haul_job = commands
                 .spawn((
                     Job,
                     HaulRequest::request_entity(resource_entity, construction_entity),
-                    pickup_site,
+                    pickup_area,
                 ))
                 .id();
 

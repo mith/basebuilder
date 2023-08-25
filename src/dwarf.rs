@@ -15,7 +15,7 @@ use rand_xoshiro::Xoshiro256StarStar;
 use crate::{
     actions::{
         meander::Meander,
-        work::{build_worker_thinker, JobsAvailable},
+        work::{worker_scorer_builder, worker_thinker_builder, JobsAvailable},
     },
     labor::job::Worker,
     main_state::MainState,
@@ -120,6 +120,6 @@ fn build_dwarf_thinker() -> ThinkerBuilder {
     Thinker::build()
         .label("Dwarf")
         .picker(FirstToScore::new(0.8))
-        .when(JobsAvailable, build_worker_thinker())
+        .when(worker_scorer_builder(), worker_thinker_builder())
         .otherwise(Meander)
 }

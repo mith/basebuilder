@@ -1,5 +1,6 @@
 use bevy::prelude::{App, Plugin};
 
+pub mod action_area;
 pub mod deliver;
 pub mod dig;
 pub mod do_dig_job;

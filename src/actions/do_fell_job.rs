@@ -1,7 +1,8 @@
 use bevy::{
+    math::Vec3Swizzles,
     prelude::{
         App, Commands, Component, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate, Query,
-        Resource, With,
+        Resource, Vec2, With,
     },
     utils::HashSet,
 };
@@ -17,24 +18,31 @@ use tracing::{debug, info};
 use crate::{
     actions::fell::FellTarget,
     labor::{chop_tree::FellingJob, job::AssignedJob},
+    pathfinding::Pathfinding,
     tree::Tree,
 };
 
-use super::fell::fell_tree;
+use super::{
+    action_area::{action_area_reachable, ActionArea, HasActionArea},
+    fell::{fell_action_area, fell_tree},
+};
 pub struct DoFellingJobPlugin;
 
 impl Plugin for DoFellingJobPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, (feller_scorer).in_set(BigBrainSet::Scorers))
-            .add_systems(
-                PreUpdate,
-                (set_fell_target, check_tree_exists).in_set(BigBrainSet::Actions),
-            );
+        app.add_systems(
+            PreUpdate,
+            action_area_reachable::<FellingJob>.in_set(BigBrainSet::Scorers),
+        )
+        .add_systems(
+            PreUpdate,
+            (set_fell_target, check_tree_exists).in_set(BigBrainSet::Actions),
+        );
     }
 }
 
 pub fn do_fell_job() -> ConcurrentlyBuilder {
-    info!("Building do_fell_job");
+    info!("Building do_fell_job action");
     let fell = Steps::build()
         .label("fell")
         .step(SetFellTarget)
@@ -86,59 +94,39 @@ fn set_fell_target(
     }
 }
 
-#[derive(Component, Clone, Debug, ScorerBuilder)]
-pub struct Feller;
+#[derive(Component, Debug, Clone, ScorerBuilder)]
+pub struct FellJobReachable;
 
-#[derive(Resource, Debug)]
-struct FellingJobs(HashSet<FellingJob>);
-
-fn feller_scorer(
-    mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<Feller>>,
-    fell_jobs_query: Query<&FellingJob>,
-    _global_transform_query: Query<&GlobalTransform>,
+fn fell_job_reachable(
+    mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<FellJobReachable>>,
+    fell_job_query: Query<&FellingJob>,
+    global_transform_query: Query<&GlobalTransform>,
+    pathfinding: Pathfinding,
 ) {
-    for (_actor, mut score, span) in &mut actor_query {
+    // If any fell jobs are reachable, set the score to 1.0
+    for (actor, mut score, span) in &mut actor_query {
         let _guard = span.span().enter();
-        // for now, just return a score of 1.0 when there is a job
-        if fell_jobs_query.iter().next().is_some() {
+        let actor_pos = global_transform_query
+            .get(actor.0)
+            .expect("Actor should have a global transform")
+            .translation()
+            .xy();
+        let any_reachable_fell_job = fell_job_query
+            .iter()
+            .flat_map(|fell_job| {
+                if let Ok(fell_job_global_pos) = global_transform_query.get(fell_job.0) {
+                    fell_action_area(fell_job_global_pos.translation().xy()).0
+                } else {
+                    Vec::new()
+                }
+            })
+            .any(|tile| pathfinding.find_path(actor_pos, tile).is_some());
+
+        if any_reachable_fell_job {
             score.set(1.0);
         } else {
             score.set(0.0);
         }
-
-        // let actor_position = global_transform_query
-        //     .get(actor.0)
-        //     .unwrap()
-        //     .translation()
-        //     .xy();
-
-        // let mut scores = vec![];
-
-        // for FellingJob { tree } in &fell_jobs_query {
-        //     let tree_position = global_transform_query
-        //         .get(*tree)
-        //         .unwrap()
-        //         .translation()
-        //         .xy();
-
-        //     let distance = actor_position.distance(tree_position);
-
-        //     const MAX_DISTANCE: f32 = 128.0;
-        //     const MIN_DISTANCE: f32 = 16.0;
-        //     const SCALE: f32 = 1.0 / (MAX_DISTANCE - MIN_DISTANCE);
-
-        //     // Score on a curve, ranging from 1.0 at 16 and closer distance to 0.0 at 128 and up distance
-        //     // distance can range from zero to infinity, but we only care about 16 to 128
-        //     let score_value =
-        //         1.0 - (distance.clamp(MIN_DISTANCE, MAX_DISTANCE) - MIN_DISTANCE) * SCALE;
-
-        //     info!("Score: {}", score_value);
-        //     scores.push(score_value);
-        // }
-
-        // // pick highest score
-        // let highest_score = scores.into_iter().fold(0.0, f32::max);
-        // score.set(highest_score);
     }
 }
 #[derive(Component, Debug, Clone, ActionBuilder)]
