@@ -1,8 +1,11 @@
-use bevy::prelude::*;
+use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::{
-    actions::action_area::ActionArea,
+    actions::{
+        action_area::{ActionArea, HasActionArea, HasActionPosition},
+        dig::{Dig, DigActionSystemParam},
+    },
     designation_layer::Designated,
     hovered_tile::HoveredTile,
     labor::job::{all_workers_eligible, Job},
@@ -33,6 +36,20 @@ impl Plugin for DigPlugin {
 
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct DigJob(pub Entity);
+
+impl HasActionArea for DigJob {
+    fn action_area(&self, action_pos_query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea> {
+        Dig(self.0).action_area(action_pos_query)
+    }
+}
+
+impl HasActionPosition for DigJob {
+    type PositionQuery<'w, 's> = DigActionSystemParam<'w, 's>;
+
+    fn action_pos(&self, dig_action_param: &Self::PositionQuery<'_, '_>) -> Option<Vec2> {
+        Dig(self.0).action_pos(dig_action_param)
+    }
+}
 
 #[derive(States, Default, Reflect, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum DigToolState {

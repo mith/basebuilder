@@ -1,7 +1,10 @@
+use std::marker::PhantomData;
+
 use bevy::{
     math::Vec3Swizzles,
     prelude::{
         App, Component, Entity, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate, Query, Vec2,
+        With,
     },
     reflect::Reflect,
 };
@@ -11,13 +14,15 @@ use big_brain::{
     thinker::{ActionSpan, Actor},
     BigBrainSet,
 };
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::{
     movement::Walker,
     pathfinding::{Path, Pathfinding},
     terrain::TerrainParams,
 };
+
+use super::action_area::{ActionArea, HasActionArea};
 
 pub struct MoveToPlugin;
 
@@ -197,4 +202,81 @@ fn is_between(point: Vec2, start: Vec2, end: Vec2) -> bool {
     let start_to_end = end - start;
     let dot = start_to_point.dot(start_to_end);
     dot > 0. && dot < start_to_end.length_squared()
+}
+
+#[derive(Component, Debug, Reflect)]
+pub struct MoveToActionArea<T: HasActionArea>(pub T);
+
+fn at_action_area(actor_position: Vec2, action_area: &ActionArea) -> bool {
+    // if we're close to a action area, we're done
+    action_area
+        .0
+        .iter()
+        .any(|&tile| Vec2::new(tile.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
+}
+
+pub fn move_to_action_area<T: HasActionArea + Component>(
+    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan, &MoveToActionArea<T>)>,
+    action_pos_query: T::PositionQuery<'_, '_>,
+    global_transform_query: Query<&GlobalTransform>,
+    mut walker_query: Query<&mut Walker>,
+    pathfinding: Pathfinding,
+    terrain: TerrainParams,
+) {
+    for (actor, mut action_state, span, move_to_action_area) in &mut action_query {
+        let _guard = span.span().enter();
+
+        match *action_state {
+            ActionState::Requested => {
+                info!(traveller=?actor.0, "Requested to move to action area");
+                *action_state = ActionState::Executing;
+            }
+            ActionState::Executing => {
+                let actor_position = global_transform_query
+                    .get(actor.0)
+                    .unwrap()
+                    .translation()
+                    .xy();
+
+                let Some(action_area) = move_to_action_area.0.action_area(&action_pos_query) else {
+                    error!("No action area found");
+                    *action_state = ActionState::Failure;
+                    continue;
+                };
+
+                // if we're close to a action area, we're done
+                if at_action_area(actor_position, &action_area) {
+                    info!("Arrived at tree");
+                    let mut walker = walker_query
+                        .get_mut(actor.0)
+                        .expect("Actor should have a walker");
+
+                    walker.move_direction = None;
+                    *action_state = ActionState::Success;
+                } else {
+                    debug!("Moving to tree");
+                    let path = action_area
+                        .0
+                        .iter()
+                        .find_map(|&tile| pathfinding.find_path(actor_position, tile));
+                    if let Some(path) = path {
+                        let mut walker = walker_query
+                            .get_mut(actor.0)
+                            .expect("Actor should have a walker");
+
+                        debug!("Following path to tree");
+                        follow_path(path, &mut walker, actor_position, &terrain);
+                    } else {
+                        error!(actor_position=?actor_position, action_area=?action_area, "No path found to tree");
+                        *action_state = ActionState::Failure;
+                    }
+                }
+            }
+            ActionState::Cancelled => {
+                info!("Cancelled");
+                *action_state = ActionState::Failure;
+            }
+            _ => {}
+        }
+    }
 }

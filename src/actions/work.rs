@@ -6,21 +6,14 @@ use bevy::prelude::{
 use big_brain::{
     actions::StepsBuilder,
     prelude::{ActionBuilder, ActionState, FirstToScore, ScorerBuilder, Steps},
-    scorers::{
-        AllOrNothing, AllOrNothingBuilder, ProductOfScorers, Score, WinningScorer,
-        WinningScorerBuilder,
-    },
+    scorers::{Score, WinningScorer, WinningScorerBuilder},
     thinker::{ActionSpan, Actor, ScorerSpan, Thinker, ThinkerBuilder},
     BigBrainSet,
 };
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{
-    actions::{
-        action_area::{ActionAreaReachable, ActionAreaReachableBuilder},
-        do_dig_job::{do_dig_job, Digger},
-        do_fell_job::{do_fell_job, FellJobReachable},
-    },
+    actions::{action_area::ActionAreaReachable, do_dig_job::do_dig_job, do_fell_job::do_fell_job},
     labor::{
         chop_tree::FellingJob,
         dig_tile::DigJob,
@@ -65,7 +58,10 @@ pub fn worker_thinker_builder() -> ThinkerBuilder {
             ActionAreaReachable::<FellingJob>::build(),
             do_job::<FellingJob, _>(do_fell_job()),
         )
-        .when(Digger, do_job::<DigJob, _>(do_dig_job()))
+        .when(
+            ActionAreaReachable::<DigJob>::build(),
+            do_job::<DigJob, _>(do_dig_job()),
+        )
 }
 
 fn do_job<T: Component + Debug, A: ActionBuilder + 'static>(job_steps: A) -> StepsBuilder {
@@ -142,7 +138,7 @@ impl<T> ActionBuilder for PickJobBuilder<T>
 where
     T: Component + Debug,
 {
-    fn build(&self, cmd: &mut Commands, action: Entity, actor: Entity) {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
         cmd.entity(action)
             .insert(PickJob::<T>(std::marker::PhantomData));
     }

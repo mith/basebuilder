@@ -1,8 +1,9 @@
 use bevy::{
+    ecs::system::SystemParam,
     math::Vec3Swizzles,
     prelude::{
         App, Commands, Component, Entity, EventReader, EventWriter, GlobalTransform,
-        IntoSystemConfigs, Plugin, PreUpdate, Query, Res, Update, Vec2, With,
+        IntoSystemConfigs, Plugin, PreUpdate, Query, Res, Update, Vec2, With, World,
     },
     reflect::Reflect,
     time::{Time, Timer, TimerMode},
@@ -25,6 +26,8 @@ use crate::{
     util::get_entity_position,
 };
 
+use super::action_area::{HasActionArea, HasActionPosition};
+
 pub struct DigPlugin;
 
 impl Plugin for DigPlugin {
@@ -36,9 +39,65 @@ impl Plugin for DigPlugin {
     }
 }
 
-#[derive(Component, Debug, Clone, Reflect, ActionBuilder)]
-pub struct Dig;
+#[derive(Component, Debug, Reflect)]
+pub struct Dig(pub Entity);
 
+#[derive(Debug, Clone)]
+pub struct DigActionBuilder;
+
+impl ActionBuilder for DigActionBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, actor: Entity) {
+        cmd.entity(actor).add(move |id: Entity, world: &mut World| {
+            let DigTarget(tile) = world
+                .get::<DigTarget>(id)
+                .expect("Actor should have a fell target")
+                .to_owned();
+            world.entity_mut(action).insert(Dig(tile));
+        });
+    }
+}
+
+impl HasActionArea for Dig {
+    fn action_area(&self, action_pos_query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea> {
+        let action_pos = self.action_pos(action_pos_query)?;
+        let x = action_pos.x;
+        let y = action_pos.y;
+        Some(ActionArea(vec![
+            // West
+            Vec2::new(x - 16., y),
+            // East
+            Vec2::new(x + 16., y),
+            // South
+            Vec2::new(x, y - 16.),
+            // Northwest
+            Vec2::new(x - 16., y + 16.),
+            // Southwest
+            Vec2::new(x - 16., y - 16.),
+            // Southeast
+            Vec2::new(x + 16., y - 16.),
+            // Northeast
+            Vec2::new(16., 16.),
+        ]))
+    }
+}
+
+#[derive(SystemParam)]
+pub struct DigActionSystemParam<'w, 's> {
+    tile_pos_query: Query<'w, 's, &'static TilePos>,
+    terrain: TerrainParams<'w, 's>,
+}
+
+impl HasActionPosition for Dig {
+    type PositionQuery<'w, 's> = DigActionSystemParam<'w, 's>;
+
+    fn action_pos(&self, dig_action_params: &DigActionSystemParam) -> Option<Vec2> {
+        dig_action_params
+            .tile_pos_query
+            .get(self.0)
+            .ok()
+            .map(|tile_pos| dig_action_params.terrain.tile_to_global_pos(*tile_pos))
+    }
+}
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct DigTarget(pub Entity);
 
@@ -252,5 +311,8 @@ fn dig_timer(
 }
 
 pub fn dig_tile() -> StepsBuilder {
-    Steps::build().label("digger").step(MoveTotile).step(Dig)
+    Steps::build()
+        .label("digger")
+        .step(MoveTotile)
+        .step(DigActionBuilder)
 }

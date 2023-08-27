@@ -1,16 +1,8 @@
-use bevy::{
-    math::Vec3Swizzles,
-    prelude::{
-        App, Commands, Component, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate, Query,
-        Resource, Vec2, With,
-    },
-    utils::HashSet,
-};
+use bevy::prelude::{App, Commands, Component, IntoSystemConfigs, Plugin, PreUpdate, Query, With};
 use big_brain::{
     actions::ConcurrentlyBuilder,
-    prelude::{ActionBuilder, ActionState, ConcurrentMode, Concurrently, ScorerBuilder, Steps},
-    scorers::Score,
-    thinker::{ActionSpan, Actor, ScorerSpan},
+    prelude::{ActionBuilder, ActionState, ConcurrentMode, Concurrently, Steps},
+    thinker::{ActionSpan, Actor},
     BigBrainSet,
 };
 use tracing::{debug, info};
@@ -18,14 +10,10 @@ use tracing::{debug, info};
 use crate::{
     actions::fell::FellTarget,
     labor::{chop_tree::FellingJob, job::AssignedJob},
-    pathfinding::Pathfinding,
     tree::Tree,
 };
 
-use super::{
-    action_area::{action_area_reachable, ActionArea, HasActionArea},
-    fell::{fell_action_area, fell_tree},
-};
+use super::{action_area::action_area_reachable, fell::fell_tree};
 pub struct DoFellingJobPlugin;
 
 impl Plugin for DoFellingJobPlugin {
@@ -94,41 +82,6 @@ fn set_fell_target(
     }
 }
 
-#[derive(Component, Debug, Clone, ScorerBuilder)]
-pub struct FellJobReachable;
-
-fn fell_job_reachable(
-    mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<FellJobReachable>>,
-    fell_job_query: Query<&FellingJob>,
-    global_transform_query: Query<&GlobalTransform>,
-    pathfinding: Pathfinding,
-) {
-    // If any fell jobs are reachable, set the score to 1.0
-    for (actor, mut score, span) in &mut actor_query {
-        let _guard = span.span().enter();
-        let actor_pos = global_transform_query
-            .get(actor.0)
-            .expect("Actor should have a global transform")
-            .translation()
-            .xy();
-        let any_reachable_fell_job = fell_job_query
-            .iter()
-            .flat_map(|fell_job| {
-                if let Ok(fell_job_global_pos) = global_transform_query.get(fell_job.0) {
-                    fell_action_area(fell_job_global_pos.translation().xy()).0
-                } else {
-                    Vec::new()
-                }
-            })
-            .any(|tile| pathfinding.find_path(actor_pos, tile).is_some());
-
-        if any_reachable_fell_job {
-            score.set(1.0);
-        } else {
-            score.set(0.0);
-        }
-    }
-}
 #[derive(Component, Debug, Clone, ActionBuilder)]
 struct CheckTreeExists;
 

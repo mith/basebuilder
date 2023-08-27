@@ -1,11 +1,9 @@
 use std::marker::PhantomData;
 
 use bevy::{
+    ecs::system::SystemParam,
     math::Vec3Swizzles,
-    prelude::{
-        Commands, Component, Entity, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate, Query,
-        Vec2, With,
-    },
+    prelude::{Commands, Component, Entity, GlobalTransform, Query, Vec2, With},
     reflect::Reflect,
 };
 use big_brain::{
@@ -19,9 +17,14 @@ use crate::pathfinding::Pathfinding;
 #[derive(Component, Clone, Reflect, Debug)]
 pub struct ActionArea(pub Vec<Vec2>);
 
-pub trait HasActionArea {
-    fn action_area(action_pos: Vec2) -> ActionArea;
-    fn action_pos(&self, global_transform_query: &Query<&GlobalTransform>) -> Option<Vec2>;
+pub trait HasActionPosition {
+    type PositionQuery<'w, 's>: SystemParam;
+
+    fn action_pos(&self, query: &Self::PositionQuery<'_, '_>) -> Option<Vec2>;
+}
+
+pub trait HasActionArea: HasActionPosition {
+    fn action_area(&self, query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea>;
 }
 
 #[derive(Clone, Debug)]
@@ -35,6 +38,7 @@ impl<T: Component + HasActionArea> ActionAreaReachable<T> {
         ActionAreaReachableBuilder(PhantomData)
     }
 }
+
 impl<T: HasActionArea + std::fmt::Debug + Component> ScorerBuilder
     for ActionAreaReachableBuilder<T>
 {
@@ -47,6 +51,7 @@ impl<T: HasActionArea + std::fmt::Debug + Component> ScorerBuilder
 pub fn action_area_reachable<T: HasActionArea + bevy::prelude::Component>(
     mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<ActionAreaReachable<T>>>,
     global_transform_query: Query<&GlobalTransform>,
+    action_pos_query: T::PositionQuery<'_, '_>,
     action_query: Query<(Entity, &T)>,
     pathfinding: Pathfinding,
 ) {
@@ -59,14 +64,12 @@ pub fn action_area_reachable<T: HasActionArea + bevy::prelude::Component>(
             .xy();
 
         let actions_iter = action_query.iter();
-        let _num_actions = actions_iter.len();
         let any_reachable_action_area = actions_iter
             .flat_map(|(_action_entity, action)| {
-                if let Some(action_global_pos) = action.action_pos(&global_transform_query) {
-                    T::action_area(action_global_pos).0
-                } else {
-                    Vec::new()
-                }
+                action
+                    .action_area(&action_pos_query)
+                    .map(|area| area.0)
+                    .unwrap_or_else(Vec::new)
             })
             .any(|tile| pathfinding.find_path(actor_pos, tile).is_some());
 

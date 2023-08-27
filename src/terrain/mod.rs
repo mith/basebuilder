@@ -219,25 +219,28 @@ fn spawn_tilemap(
                     x: x as u32,
                     y: y as u32,
                 };
-
-                let tile_entity = commands
-                    .spawn((
-                        Name::new("TerrainTile"),
-                        TileBundle {
-                            position: tile_pos,
-                            tilemap_id: TilemapId(terrain_entity),
-                            texture_index: TileTextureIndex(0),
-                            color: material_properties.0[*tile as usize].color.into(),
-                            ..default()
-                        },
-                        TransformBundle::from_transform(Transform::from_translation(Vec3::new(
-                            x as f32 * terrain_settings.cell_size,
-                            y as f32 * terrain_settings.cell_size,
-                            0.0,
-                        ))),
-                    ))
-                    .id();
-                tile_storage.set(&tile_pos, tile_entity);
+                commands.entity(terrain_entity).with_children(|parent| {
+                    let tile_entity = parent
+                        .spawn((
+                            Name::new("TerrainTile"),
+                            TileBundle {
+                                position: tile_pos,
+                                tilemap_id: TilemapId(terrain_entity),
+                                texture_index: TileTextureIndex(0),
+                                color: material_properties.0[*tile as usize].color.into(),
+                                ..default()
+                            },
+                            TransformBundle::from_transform(Transform::from_translation(
+                                Vec3::new(
+                                    x as f32 * terrain_settings.cell_size,
+                                    y as f32 * terrain_settings.cell_size,
+                                    0.0,
+                                ),
+                            )),
+                        ))
+                        .id();
+                    tile_storage.set(&tile_pos, tile_entity);
+                });
             }
         }
 

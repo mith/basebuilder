@@ -3,14 +3,17 @@ use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
-    actions::action_area::{ActionArea, HasActionArea},
+    actions::{
+        action_area::{ActionArea, HasActionArea, HasActionPosition},
+        fell::Fell,
+    },
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
-    labor::job::{all_workers_eligible, CanceledJob, Job},
-    tree::{Tree, TreeDestroyedEvent, TREE_COLLISION_GROUP},
+    labor::job::{all_workers_eligible, Job},
+    tree::{Tree, TREE_COLLISION_GROUP},
 };
 
-use super::job::{AssignedWorker, JobAssignmentSet, JobManagerParams};
+use super::job::{JobAssignmentSet, JobManagerParams};
 
 pub struct ChopTreePlugin;
 
@@ -35,18 +38,16 @@ impl Plugin for ChopTreePlugin {
 pub struct FellingJob(pub Entity);
 
 impl HasActionArea for FellingJob {
-    fn action_area(action_pos: Vec2) -> ActionArea {
-        ActionArea(vec![
-            action_pos - Vec2::new(16., 0.),
-            action_pos + Vec2::new(16., 0.),
-        ])
+    fn action_area(&self, action_pos_query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea> {
+        Fell(self.0).action_area(action_pos_query)
     }
+}
 
-    fn action_pos(&self, global_transform_query: &Query<&GlobalTransform>) -> Option<Vec2> {
-        global_transform_query
-            .get(self.0)
-            .map(|tree_transform| tree_transform.translation().xy())
-            .ok()
+impl HasActionPosition for FellingJob {
+    type PositionQuery<'w, 's> = Query<'w, 's, &'static GlobalTransform>;
+
+    fn action_pos(&self, global_transform_query: &Self::PositionQuery<'_, '_>) -> Option<Vec2> {
+        Fell(self.0).action_pos(global_transform_query)
     }
 }
 
