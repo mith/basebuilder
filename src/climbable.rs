@@ -1,7 +1,7 @@
 use bevy::{math::Vec3Swizzles, prelude::*, utils::HashSet};
 use bevy_ecs_tilemap::tiles::TilePos;
 
-use crate::terrain::{Terrain, TerrainParams};
+use crate::terrain::{Terrain, TerrainParam};
 
 pub struct ClimbablePlugin;
 
@@ -38,7 +38,7 @@ fn create_climbable_map(
 
 fn update_climbable_map(
     mut climbable_map: Query<&mut ClimbableMap, With<Terrain>>,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
     addded_climbabes: Query<&GlobalTransform, Added<Climbable>>,
 ) {
     let Ok(mut climbable_map) = climbable_map.get_single_mut() else { return; };

@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::system::SystemParam,
+    ecs::system::{lifetimeless::SQuery, StaticSystemParam, SystemParam, SystemParamItem},
     math::Vec3Swizzles,
     prelude::{
         App, Commands, Component, Entity, EventReader, EventWriter, GlobalTransform,
@@ -19,14 +19,14 @@ use tracing::{debug, error, info, trace};
 
 use crate::{
     actions::action_area::ActionArea,
-    actions::move_to::follow_path,
-    movement::Walker,
-    pathfinding::Pathfinding,
-    terrain::{TerrainParams, TerrainSet, TileDamageEvent, TileDestroyedEvent},
+    terrain::{TerrainParam, TerrainSet, TileDamageEvent, TileDestroyedEvent},
     util::get_entity_position,
 };
 
-use super::action_area::{HasActionArea, HasActionPosition};
+use super::{
+    action_area::{HasActionArea, HasActionPosition},
+    move_to::{move_to_action_area, MoveToActionArea},
+};
 
 pub struct DigPlugin;
 
@@ -34,63 +34,54 @@ impl Plugin for DigPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Dig>()
             .register_type::<DigTimer>()
-            .add_systems(PreUpdate, (move_to_tile, dig).in_set(BigBrainSet::Actions))
+            .add_systems(
+                PreUpdate,
+                (move_to_action_area::<DigTarget>, dig).in_set(BigBrainSet::Actions),
+            )
             .add_systems(Update, dig_timer.before(TerrainSet));
     }
 }
 
-#[derive(Component, Debug, Reflect)]
-pub struct Dig(pub Entity);
+#[derive(Component, Clone, Debug, Reflect, ActionBuilder)]
+pub struct Dig;
 
-#[derive(Debug, Clone)]
-pub struct DigActionBuilder;
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct DigTarget(pub Entity);
 
-impl ActionBuilder for DigActionBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, actor: Entity) {
-        cmd.entity(actor).add(move |id: Entity, world: &mut World| {
-            let DigTarget(tile) = world
-                .get::<DigTarget>(id)
-                .expect("Actor should have a fell target")
-                .to_owned();
-            world.entity_mut(action).insert(Dig(tile));
-        });
-    }
-}
-
-impl HasActionArea for Dig {
-    fn action_area(&self, action_pos_query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea> {
-        let action_pos = self.action_pos(action_pos_query)?;
-        let x = action_pos.x;
-        let y = action_pos.y;
-        Some(ActionArea(vec![
+impl HasActionArea for DigTarget {
+    fn action_area() -> ActionArea {
+        ActionArea(vec![
             // West
-            Vec2::new(x - 16., y),
+            Vec2::new(-16., 0.),
             // East
-            Vec2::new(x + 16., y),
+            Vec2::new(16., 0.),
             // South
-            Vec2::new(x, y - 16.),
+            Vec2::new(0., -16.),
             // Northwest
-            Vec2::new(x - 16., y + 16.),
+            Vec2::new(-16., 16.),
             // Southwest
-            Vec2::new(x - 16., y - 16.),
+            Vec2::new(-16., -16.),
             // Southeast
-            Vec2::new(x + 16., y - 16.),
+            Vec2::new(16., -16.),
             // Northeast
             Vec2::new(16., 16.),
-        ]))
+        ])
     }
 }
 
 #[derive(SystemParam)]
 pub struct DigActionSystemParam<'w, 's> {
     tile_pos_query: Query<'w, 's, &'static TilePos>,
-    terrain: TerrainParams<'w, 's>,
+    terrain: TerrainParam<'w, 's>,
 }
 
-impl HasActionPosition for Dig {
-    type PositionQuery<'w, 's> = DigActionSystemParam<'w, 's>;
+impl HasActionPosition for DigTarget {
+    type PositionParam = DigActionSystemParam<'static, 'static>;
 
-    fn action_pos(&self, dig_action_params: &DigActionSystemParam) -> Option<Vec2> {
+    fn action_pos(
+        &self,
+        dig_action_params: &SystemParamItem<DigActionSystemParam>,
+    ) -> Option<Vec2> {
         dig_action_params
             .tile_pos_query
             .get(self.0)
@@ -98,13 +89,18 @@ impl HasActionPosition for Dig {
             .map(|tile_pos| dig_action_params.terrain.tile_to_global_pos(*tile_pos))
     }
 }
-#[derive(Component, Debug, Clone, Reflect)]
-pub struct DigTarget(pub Entity);
 
-#[derive(Component, Clone, Debug, ActionBuilder)]
-struct MoveTotile;
+#[derive(Component, Clone, Debug)]
+struct MoveToTileActionBuilder;
 
-fn dig_work_area(tile_pos: TilePos, terrain: &TerrainParams) -> ActionArea {
+impl ActionBuilder for MoveToTileActionBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action)
+            .insert(MoveToActionArea::<DigTarget>::build());
+    }
+}
+
+fn dig_work_area(tile_pos: TilePos, terrain: &TerrainParam) -> ActionArea {
     let tile_global_pos = terrain.tile_to_global_pos(tile_pos);
     // All sites around the target tile
     // NW, NE, E, SE, S, SW, W
@@ -127,88 +123,6 @@ fn at_work_area(actor_position: Vec2, work_area: &ActionArea) -> bool {
         .any(|&site| Vec2::new(site.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
 }
 
-fn move_to_tile(
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<MoveTotile>>,
-    global_transform_query: Query<&GlobalTransform>,
-    dig_target_query: Query<&DigTarget>,
-    pathfinding: Pathfinding,
-    tile_query: Query<&TilePos>,
-    terrain: TerrainParams,
-    mut walker_query: Query<&mut Walker>,
-) {
-    for (actor, mut action_state, span) in &mut action_query {
-        let _guard = span.span().enter();
-
-        match *action_state {
-            ActionState::Requested => {
-                info!("Starting move to tile");
-                *action_state = ActionState::Executing;
-            }
-            ActionState::Executing => {
-                let actor_position = global_transform_query
-                    .get(actor.0)
-                    .unwrap()
-                    .translation()
-                    .xy();
-                let Some(dig_target) = dig_target_query.get(actor.0).ok() else {
-                    error!("No dig target");
-                    *action_state = ActionState::Failure;
-                    continue;
-                };
-                if tile_query.get(dig_target.0).is_err() {
-                    info!("tile no longer exists");
-                    *action_state = ActionState::Cancelled;
-                    continue;
-                }
-                let Some(tile_pos) = terrain.get_entity_tile_pos(dig_target.0) else {
-                    error!("Tile has no position");
-                    *action_state = ActionState::Failure;
-                    continue;
-                };
-                let work_area = dig_work_area(tile_pos, &terrain);
-                // if we're close to a job site, we're done
-                if at_work_area(actor_position, &work_area) {
-                    info!("Arrived at tile");
-                    let mut walker = walker_query
-                        .get_mut(actor.0)
-                        .expect("Actor should have a walker");
-
-                    walker.move_direction = None;
-                    *action_state = ActionState::Success;
-                } else {
-                    debug!("Moving to tile");
-                    let path = work_area
-                        .0
-                        .iter()
-                        .find_map(|&site| pathfinding.find_path(actor_position, site));
-                    if let Some(path) = path {
-                        let mut walker = walker_query
-                            .get_mut(actor.0)
-                            .expect("Actor should have a walker");
-
-                        debug!("Following path to tile");
-                        follow_path(path, &mut walker, actor_position, &terrain);
-                    } else {
-                        error!(actor_position=?actor_position, work_area=?work_area, "No path found to tile");
-                        *action_state = ActionState::Failure;
-                    }
-                }
-            }
-            ActionState::Cancelled => {
-                info!("Cancelling move to tile");
-                let mut walker = walker_query
-                    .get_mut(actor.0)
-                    .expect("Actor should have a walker");
-
-                walker.move_direction = None;
-
-                *action_state = ActionState::Failure;
-            }
-            _ => {}
-        }
-    }
-}
-
 #[derive(Component, Debug, Reflect)]
 pub struct DigTimer {
     pub tile_entity: Entity,
@@ -221,7 +135,7 @@ fn dig(
     global_transform_query: Query<&GlobalTransform>,
     dig_target_query: Query<&DigTarget>,
     tile_query: Query<&TilePos>,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
     mut dig_timer_query: Query<&mut DigTimer>,
     mut tile_destroyed_event_reader: EventReader<TileDestroyedEvent>,
 ) {
@@ -235,11 +149,6 @@ fn dig(
             }
             ActionState::Executing => {
                 trace!("Digging");
-                let Ok(dig_target) = dig_target_query.get(actor.0) else {
-                    info!("No dig target");
-                    *action_state = ActionState::Cancelled;
-                    continue;
-                };
                 let actor_position = get_entity_position(&global_transform_query, actor.0);
                 let Some(dig_target) = dig_target_query.get(actor.0).ok() else {
                     error!("No dig target");
@@ -313,6 +222,6 @@ fn dig_timer(
 pub fn dig_tile() -> StepsBuilder {
     Steps::build()
         .label("digger")
-        .step(MoveTotile)
-        .step(DigActionBuilder)
+        .step(MoveToTileActionBuilder)
+        .step(Dig)
 }

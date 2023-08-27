@@ -1,15 +1,19 @@
-use bevy::{math::Vec3Swizzles, prelude::*};
+use bevy::{
+    ecs::system::{StaticSystemParam, SystemParamItem},
+    math::Vec3Swizzles,
+    prelude::*,
+};
 use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::{
     actions::{
         action_area::{ActionArea, HasActionArea, HasActionPosition},
-        dig::{Dig, DigActionSystemParam},
+        dig::{Dig, DigActionSystemParam, DigTarget},
     },
     designation_layer::Designated,
     hovered_tile::HoveredTile,
     labor::job::{all_workers_eligible, Job},
-    terrain::TerrainParams,
+    terrain::TerrainParam,
 };
 
 use super::job::{AssignedWorker, CompletedJob};
@@ -38,16 +42,16 @@ impl Plugin for DigPlugin {
 pub struct DigJob(pub Entity);
 
 impl HasActionArea for DigJob {
-    fn action_area(&self, action_pos_query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea> {
-        Dig(self.0).action_area(action_pos_query)
+    fn action_area() -> ActionArea {
+        DigTarget::action_area()
     }
 }
 
 impl HasActionPosition for DigJob {
-    type PositionQuery<'w, 's> = DigActionSystemParam<'w, 's>;
+    type PositionParam = DigActionSystemParam<'static, 'static>;
 
-    fn action_pos(&self, dig_action_param: &Self::PositionQuery<'_, '_>) -> Option<Vec2> {
-        Dig(self.0).action_pos(dig_action_param)
+    fn action_pos(&self, dig_action_param: &SystemParamItem<Self::PositionParam>) -> Option<Vec2> {
+        DigTarget(self.0).action_pos(dig_action_param)
     }
 }
 
@@ -62,7 +66,7 @@ fn designate_dig(
     mut commands: Commands,
     mouse_button_input: Res<Input<MouseButton>>,
     tile_query: Query<(Entity, &TilePos), With<HoveredTile>>,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
 ) {
     if mouse_button_input.just_pressed(MouseButton::Left) {
         for (tile_entity, tile_pos) in &tile_query {

@@ -1,11 +1,15 @@
-use bevy::{math::Vec3Swizzles, prelude::*};
+use bevy::{
+    ecs::system::{lifetimeless::SQuery, StaticSystemParam, SystemParamItem},
+    math::Vec3Swizzles,
+    prelude::*,
+};
 
 use bevy_rapier2d::prelude::{CollisionGroups, Group, RapierContext};
 
 use crate::{
     actions::{
         action_area::{ActionArea, HasActionArea, HasActionPosition},
-        fell::Fell,
+        fell::{Fell, FellTarget},
     },
     cursor_position::LastCursorPosition,
     designation_layer::Designated,
@@ -38,16 +42,19 @@ impl Plugin for ChopTreePlugin {
 pub struct FellingJob(pub Entity);
 
 impl HasActionArea for FellingJob {
-    fn action_area(&self, action_pos_query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea> {
-        Fell(self.0).action_area(action_pos_query)
+    fn action_area() -> ActionArea {
+        FellTarget::action_area()
     }
 }
 
 impl HasActionPosition for FellingJob {
-    type PositionQuery<'w, 's> = Query<'w, 's, &'static GlobalTransform>;
+    type PositionParam = SQuery<&'static GlobalTransform>;
 
-    fn action_pos(&self, global_transform_query: &Self::PositionQuery<'_, '_>) -> Option<Vec2> {
-        Fell(self.0).action_pos(global_transform_query)
+    fn action_pos(
+        &self,
+        global_transform_query: &SystemParamItem<Self::PositionParam>,
+    ) -> Option<Vec2> {
+        FellTarget(self.0).action_pos(global_transform_query)
     }
 }
 

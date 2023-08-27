@@ -21,7 +21,7 @@ use crate::{
 
 use terrain_gen::{create_terrain_generator_function, generate_terrain, GeneratorFunction};
 
-pub use self::terrain_params::TerrainParams;
+pub use self::terrain_params::TerrainParam;
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {

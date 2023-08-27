@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::system::{lifetimeless::SQuery, StaticSystemParam, SystemParamItem},
     math::Vec3Swizzles,
     prelude::{
         App, Commands, Component, Entity, EventReader, EventWriter, GlobalTransform,
@@ -36,44 +37,27 @@ impl Plugin for FellPlugin {
             .register_type::<FellTarget>()
             .add_systems(
                 PreUpdate,
-                (fell, move_to_action_area::<Fell>).in_set(BigBrainSet::Actions),
+                (fell, move_to_action_area::<FellTarget>).in_set(BigBrainSet::Actions),
             )
             .add_systems(Update, felling_timer);
     }
 }
 
-#[derive(Component, Debug, Reflect)]
-pub struct Fell(pub Entity);
+#[derive(Component, Clone, Debug, Reflect, ActionBuilder)]
+pub struct Fell;
 
-#[derive(Debug, Reflect)]
-pub struct FellActionBuilder;
-
-impl ActionBuilder for FellActionBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, actor: Entity) {
-        cmd.entity(actor).add(move |id: Entity, world: &mut World| {
-            let FellTarget(tree) = world
-                .get::<FellTarget>(id)
-                .expect("Actor should have a fell target")
-                .to_owned();
-
-            world.entity_mut(action).insert(Fell(tree));
-        });
+impl HasActionArea for FellTarget {
+    fn action_area() -> ActionArea {
+        ActionArea(vec![Vec2::new(16., 0.), Vec2::new(16., 0.)])
     }
 }
 
-impl HasActionArea for Fell {
-    fn action_area(&self, action_pos_query: &Self::PositionQuery<'_, '_>) -> Option<ActionArea> {
-        let action_pos = self.action_pos(action_pos_query)?;
-        Some(ActionArea(vec![
-            action_pos - Vec2::new(16., 0.),
-            action_pos + Vec2::new(16., 0.),
-        ]))
-    }
-}
-
-impl HasActionPosition for Fell {
-    type PositionQuery<'w, 's> = Query<'w, 's, &'static GlobalTransform>;
-    fn action_pos(&self, global_transform_query: &Self::PositionQuery<'_, '_>) -> Option<Vec2> {
+impl HasActionPosition for FellTarget {
+    type PositionParam = SQuery<&'static GlobalTransform>;
+    fn action_pos(
+        &self,
+        global_transform_query: &SystemParamItem<Self::PositionParam>,
+    ) -> Option<Vec2> {
         global_transform_query
             .get(self.0)
             .map(|tree_transform| tree_transform.translation().xy())
@@ -88,17 +72,9 @@ pub struct FellTarget(pub Entity);
 pub struct MoveToFellActionBuilder;
 
 impl ActionBuilder for MoveToFellActionBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, actor: Entity) {
-        cmd.entity(actor).add(move |id: Entity, world: &mut World| {
-            let FellTarget(tree) = world
-                .get::<FellTarget>(id)
-                .expect("Actor should have a fell target")
-                .to_owned();
-
-            world
-                .entity_mut(action)
-                .insert(MoveToActionArea(Fell(tree)));
-        });
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action)
+            .insert(MoveToActionArea::<FellTarget>::build());
     }
 }
 
@@ -227,5 +203,5 @@ pub fn fell_tree() -> StepsBuilder {
     Steps::build()
         .label("feller")
         .step(MoveToFellActionBuilder)
-        .step(FellActionBuilder)
+        .step(Fell)
 }

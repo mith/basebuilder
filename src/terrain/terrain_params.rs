@@ -11,7 +11,7 @@ use bevy_ecs_tilemap::{
 use super::{Terrain, TerrainData};
 
 #[derive(SystemParam)]
-pub struct TerrainParams<'w, 's> {
+pub struct TerrainParam<'w, 's> {
     pub terrain_query: Query<
         'w,
         's,
@@ -29,7 +29,7 @@ pub struct TerrainParams<'w, 's> {
     pub tile_pos_query: Query<'w, 's, &'static TilePos>,
 }
 
-impl TerrainParams<'_, '_> {
+impl TerrainParam<'_, '_> {
     pub fn global_to_tile_pos(&self, global_pos: Vec2) -> Option<TilePos> {
         let Ok((_, terrain_transform, tilemap_grid_size, tilemap_size, tilemap_type)) =
             self.terrain_query.get_single() else {

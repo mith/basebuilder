@@ -8,7 +8,7 @@ use bevy_ecs_tilemap::{
 use crate::{
     cursor_position::LastCursorPosition,
     main_state::MainState,
-    terrain::{TerrainParams, TerrainSet, TileDestroyedEvent},
+    terrain::{TerrainParam, TerrainSet, TileDestroyedEvent},
     terrain_settings::TerrainSettings,
 };
 
@@ -87,7 +87,7 @@ fn hovered_tile(
     mut commands: Commands,
     cursor_pos: Res<LastCursorPosition>,
     hovered_tiles_query: Query<Entity, With<HoveredTile>>,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
 ) {
     let cursor_tile_pos = terrain.global_to_tile_pos(cursor_pos.0.xy());
 

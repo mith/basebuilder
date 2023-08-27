@@ -19,10 +19,12 @@ use tracing::{debug, error, info};
 use crate::{
     movement::Walker,
     pathfinding::{Path, Pathfinding},
-    terrain::TerrainParams,
+    terrain::TerrainParam,
 };
 
-use super::action_area::{ActionArea, HasActionArea};
+use super::action_area::{
+    ActionArea, ActionAreaParam, GlobalActionArea, HasActionArea, HasActionPosition,
+};
 
 pub struct MoveToPlugin;
 
@@ -53,7 +55,7 @@ fn move_to_position(
     )>,
     global_transform_query: Query<&GlobalTransform>,
     pathfinding: Pathfinding,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
 ) {
     for (actor, mut walker, mut action_state, move_to, span) in &mut move_to_query {
         let _guard = span.span().enter();
@@ -110,7 +112,7 @@ fn follow_entity(
     )>,
     global_transform_query: Query<&GlobalTransform>,
     pathfinding: Pathfinding,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
 ) {
     for (actor, mut walker, mut action_state, follow_entity, span) in &mut follow_entity_query {
         let _guard = span.span().enter();
@@ -160,7 +162,7 @@ pub fn follow_path(
     mut path: Path,
     walker: &mut Walker,
     walker_position: Vec2,
-    terrain: &TerrainParams,
+    terrain: &TerrainParam,
 ) {
     const TOLERANCE: f32 = 3.;
     let walker_tile_pos = terrain.global_to_tile_pos(walker_position).unwrap();
@@ -205,7 +207,13 @@ fn is_between(point: Vec2, start: Vec2, end: Vec2) -> bool {
 }
 
 #[derive(Component, Debug, Reflect)]
-pub struct MoveToActionArea<T: HasActionArea>(pub T);
+pub struct MoveToActionArea<T: HasActionArea>(PhantomData<T>);
+
+impl<T: HasActionArea> MoveToActionArea<T> {
+    pub fn build() -> Self {
+        Self(PhantomData)
+    }
+}
 
 fn at_action_area(actor_position: Vec2, action_area: &ActionArea) -> bool {
     // if we're close to a action area, we're done
@@ -215,15 +223,16 @@ fn at_action_area(actor_position: Vec2, action_area: &ActionArea) -> bool {
         .any(|&tile| Vec2::new(tile.x, 0.).distance(Vec2::new(actor_position.x, 0.)) < 5.)
 }
 
-pub fn move_to_action_area<T: HasActionArea + Component>(
-    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan, &MoveToActionArea<T>)>,
-    action_pos_query: T::PositionQuery<'_, '_>,
+pub fn move_to_action_area<T: GlobalActionArea + Component>(
+    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<MoveToActionArea<T>>>,
+    target_query: Query<&T>,
     global_transform_query: Query<&GlobalTransform>,
     mut walker_query: Query<&mut Walker>,
     pathfinding: Pathfinding,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
+    action_area_param: ActionAreaParam<T>,
 ) {
-    for (actor, mut action_state, span, move_to_action_area) in &mut action_query {
+    for (actor, mut action_state, span) in &mut action_query {
         let _guard = span.span().enter();
 
         match *action_state {
@@ -238,7 +247,9 @@ pub fn move_to_action_area<T: HasActionArea + Component>(
                     .translation()
                     .xy();
 
-                let Some(action_area) = move_to_action_area.0.action_area(&action_pos_query) else {
+                let target = target_query.get(actor.0).unwrap();
+
+                let Some(action_area) = action_area_param.global_action_area(target) else {
                     error!("No action area found");
                     *action_state = ActionState::Failure;
                     continue;

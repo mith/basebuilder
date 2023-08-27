@@ -1,6 +1,9 @@
 use std::matches;
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::{lifetimeless::SQuery, SystemParam},
+    prelude::*,
+};
 
 use bevy_ecs_tilemap::{
     helpers::square_grid::neighbors::SquareDirection, prelude::TilemapSize, tiles::TilePos,
@@ -9,12 +12,12 @@ use pathfinding::directed::astar::astar;
 
 use crate::{
     climbable::ClimbableMap,
-    terrain::{TerrainData, TerrainParams},
+    terrain::{TerrainData, TerrainParam},
 };
 
 #[derive(SystemParam)]
 pub struct Pathfinding<'w, 's> {
-    pub terrain: TerrainParams<'w, 's>,
+    pub terrain: TerrainParam<'w, 's>,
     climbable_map_query: Query<'w, 's, &'static ClimbableMap>,
 }
 

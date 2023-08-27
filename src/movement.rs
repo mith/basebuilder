@@ -8,7 +8,7 @@ use bevy_rapier2d::prelude::{
 use crate::{
     climbable::ClimbableMap,
     dwarf::DWARF_COLLISION_GROUP,
-    terrain::{TerrainParams, TERRAIN_COLLISION_GROUP},
+    terrain::{TerrainParam, TERRAIN_COLLISION_GROUP},
 };
 
 pub struct MovementPlugin;
@@ -85,7 +85,7 @@ fn fall(
         With<Climber>,
     >,
     climbable_map_query: Query<&ClimbableMap>,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
 ) {
     for (climber_entity, mut controller, climber_transform) in &mut climber_query {
         for climbable_map in &climbable_map_query {

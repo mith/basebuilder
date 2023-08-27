@@ -8,7 +8,7 @@ use bevy_ecs_tilemap::{
 use crate::{
     main_state::MainState,
     pathfinding::{can_stand, Path},
-    terrain::{Terrain, TerrainParams},
+    terrain::{Terrain, TerrainParam},
     terrain_settings::TerrainSettings,
 };
 
@@ -84,7 +84,7 @@ fn highlight_walkable_tiles(
     mut commands: Commands,
     mut tilemap_query: Query<(Entity, &mut TileStorage), (With<WalkableLayer>, Without<Terrain>)>,
     config: Res<TerrainSettings>,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
 ) {
     let terrain_data = terrain.terrain_data_query.single();
 
@@ -143,7 +143,7 @@ fn render_paths(
     paths: Query<(Entity, &Path, Option<&PathfindingDebugNodes>), Changed<Path>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    terrain: TerrainParams,
+    terrain: TerrainParam,
 ) {
     for (path_entity, path, opt_debug_nodes) in &paths {
         if let Some(debug_nodes) = opt_debug_nodes {
