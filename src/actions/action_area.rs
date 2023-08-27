@@ -1,9 +1,12 @@
 use std::marker::PhantomData;
 
 use bevy::{
-    ecs::system::{
-        lifetimeless::{Read, SQuery},
-        StaticSystemParam, SystemParam, SystemParamItem,
+    ecs::{
+        query::ReadOnlyWorldQuery,
+        system::{
+            lifetimeless::{Read, SQuery},
+            StaticSystemParam, SystemParam, SystemParamItem,
+        },
     },
     math::Vec3Swizzles,
     prelude::{Commands, Component, Entity, GlobalTransform, Query, Vec2, With},
@@ -15,7 +18,7 @@ use big_brain::{
     thinker::{Actor, ScorerSpan},
 };
 
-use crate::pathfinding::Pathfinding;
+use crate::pathfinding::{Path, Pathfinding};
 
 #[derive(Component, Clone, Reflect, Debug)]
 pub struct ActionArea(pub Vec<Vec2>);
@@ -57,12 +60,16 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub struct ActionAreaReachableBuilder<T>(PhantomData<T>);
+pub struct ActionAreaReachableBuilder<T, F = ()>(PhantomData<(T, F)>);
 
 #[derive(Component, Clone, Debug)]
-pub struct ActionAreaReachable<T>(PhantomData<T>);
+pub struct ActionAreaReachable<T, F = ()>(PhantomData<(T, F)>);
 
-impl<T: Component + HasActionArea> ActionAreaReachable<T> {
+impl<T, F> ActionAreaReachable<T, F>
+where
+    T: Component + HasActionArea,
+    F: ReadOnlyWorldQuery,
+{
     pub fn build() -> ActionAreaReachableBuilder<T> {
         ActionAreaReachableBuilder(PhantomData)
     }
@@ -78,30 +85,38 @@ impl<T: HasActionArea + std::fmt::Debug + Component> ScorerBuilder
 }
 
 #[derive(SystemParam)]
-pub struct ActionAreaParam<'w, 's, T>
+pub struct ActionAreaParam<'w, 's, T, F = ()>
 where
     T: GlobalActionArea + Component + 'static,
+    F: ReadOnlyWorldQuery + 'static,
 {
-    action_query: Query<'w, 's, (Entity, Read<T>)>,
+    action_query: Query<'w, 's, (Entity, Read<T>), F>,
     action_pos_query: StaticSystemParam<'w, 's, <T as HasActionPosition>::PositionParam>,
     pathfinding: Pathfinding<'w, 's>,
 }
 
-impl<'w, 's, T> ActionAreaParam<'_, '_, T>
+impl<'w, 's, T, F> ActionAreaParam<'_, '_, T, F>
 where
     T: GlobalActionArea + Component,
+    F: ReadOnlyWorldQuery + 'static,
 {
-    pub fn is_action_area_reachable(&self, actor_pos: Vec2) -> bool {
-        let any_reachable_action_area = self
-            .action_query
+    pub fn path_to_action_area(&self, actor_pos: Vec2, action: &T) -> Option<Path> {
+        self.global_action_area(action).and_then(|area| {
+            area.0
+                .iter()
+                .flat_map(|tile| self.pathfinding.find_path(actor_pos, *tile))
+                .min_by_key(|path| path.0.len())
+        })
+    }
+
+    pub fn closest_action(&self, actor_pos: Vec2) -> Option<(Entity, &T, Path)> {
+        self.action_query
             .iter()
-            .flat_map(|(_action_entity, action)| {
-                self.global_action_area(action)
-                    .map(|area| area.0)
-                    .unwrap_or_else(Vec::new)
+            .flat_map(|(entity, action)| {
+                self.path_to_action_area(actor_pos, action)
+                    .map(|path| (entity, action, path))
             })
-            .any(|tile| self.pathfinding.find_path(actor_pos, tile).is_some());
-        any_reachable_action_area
+            .min_by_key(|(_, _, path)| path.0.len())
     }
 
     pub fn global_action_area(&self, action: &T) -> Option<ActionArea> {
@@ -116,11 +131,14 @@ where
 /// # Panics
 ///
 /// Panics if the actor does not have a GlobalTransform component.
-pub fn action_area_reachable<T: GlobalActionArea + bevy::prelude::Component>(
+pub fn action_area_reachable<T, F>(
     mut actor_query: Query<(&Actor, &mut Score, &ScorerSpan), With<ActionAreaReachable<T>>>,
     global_transform_query: Query<&GlobalTransform>,
-    action_area_param: ActionAreaParam<T>,
-) {
+    action_area_param: ActionAreaParam<T, F>,
+) where
+    T: GlobalActionArea + Component,
+    F: ReadOnlyWorldQuery + 'static,
+{
     for (actor, mut score, span) in &mut actor_query {
         let _guard = span.span().enter();
         let actor_pos = global_transform_query
@@ -129,10 +147,22 @@ pub fn action_area_reachable<T: GlobalActionArea + bevy::prelude::Component>(
             .translation()
             .xy();
 
-        let any_reachable_action_area = action_area_param.is_action_area_reachable(actor_pos);
+        let closest_action_path_length = action_area_param
+            .action_query
+            .iter()
+            .flat_map(|(_, action)| {
+                let path = action_area_param.path_to_action_area(actor_pos, action)?;
+                Some(path.0.len())
+            })
+            .min();
 
-        if any_reachable_action_area {
-            score.set(1.0);
+        // Convert path length to a score clamped between 0 and 1,
+        // where 0 is the longest path and 1 is a path length of zero.
+
+        if let Some(closest_action_path_length) = closest_action_path_length {
+            let path_score = 1.0 - (closest_action_path_length as f32 / 100.0).min(0.9);
+            debug_assert!(path_score >= 0.1 && path_score <= 1.0);
+            score.set(path_score);
         } else {
             score.set(0.0);
         }

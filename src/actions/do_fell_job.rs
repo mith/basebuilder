@@ -1,4 +1,6 @@
-use bevy::prelude::{App, Commands, Component, IntoSystemConfigs, Plugin, PreUpdate, Query, With};
+use bevy::prelude::{
+    App, Commands, Component, IntoSystemConfigs, Plugin, PreUpdate, Query, With, Without,
+};
 use big_brain::{
     actions::ConcurrentlyBuilder,
     prelude::{ActionBuilder, ActionState, ConcurrentMode, Concurrently, Steps},
@@ -9,7 +11,10 @@ use tracing::{debug, info};
 
 use crate::{
     actions::fell::FellTarget,
-    labor::{chop_tree::FellingJob, job::AssignedJob},
+    labor::{
+        chop_tree::FellingJob,
+        job::{AssignedJob, AssignedWorker},
+    },
     tree::Tree,
 };
 
@@ -20,7 +25,8 @@ impl Plugin for DoFellingJobPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PreUpdate,
-            action_area_reachable::<FellingJob>.in_set(BigBrainSet::Scorers),
+            action_area_reachable::<FellingJob, Without<AssignedWorker>>
+                .in_set(BigBrainSet::Scorers),
         )
         .add_systems(
             PreUpdate,

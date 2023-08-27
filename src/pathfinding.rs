@@ -41,7 +41,7 @@ impl<'w, 's> Pathfinding<'w, 's> {
     }
 }
 
-#[derive(Component, Reflect, Clone)]
+#[derive(Component, Debug, Reflect, Clone)]
 pub struct Path(pub Vec<UVec2>);
 
 pub fn find_path(

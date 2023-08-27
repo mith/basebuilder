@@ -94,6 +94,11 @@ impl JobManagerParams<'_, '_> {
         );
     }
 
+    pub fn cancel_job_assignment(&mut self, job_entity: Entity, worker_entity: Entity) {
+        self.commands.entity(worker_entity).remove::<AssignedJob>();
+        self.commands.entity(job_entity).remove::<AssignedWorker>();
+    }
+
     pub fn complete_job(&mut self, job_entity: Entity, worker_entity: Entity) {
         self.commands
             .entity(job_entity)

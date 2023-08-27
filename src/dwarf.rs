@@ -15,7 +15,7 @@ use rand_xoshiro::Xoshiro256StarStar;
 use crate::{
     actions::{
         meander::Meander,
-        work::{worker_scorer_builder, worker_thinker_builder, JobsAvailable},
+        work::{worker_scorer_builder, worker_thinker_builder},
     },
     labor::job::Worker,
     main_state::MainState,

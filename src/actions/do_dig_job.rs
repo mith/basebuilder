@@ -1,4 +1,6 @@
-use bevy::prelude::{App, Commands, Component, IntoSystemConfigs, Plugin, PreUpdate, Query, With};
+use bevy::prelude::{
+    App, Commands, Component, IntoSystemConfigs, Plugin, PreUpdate, Query, With, Without,
+};
 use bevy_ecs_tilemap::tiles::TilePos;
 use big_brain::{
     actions::ConcurrentlyBuilder,
@@ -10,7 +12,10 @@ use tracing::{debug, info};
 
 use crate::{
     actions::dig::DigTarget,
-    labor::{dig_tile::DigJob, job::AssignedJob},
+    labor::{
+        dig_tile::DigJob,
+        job::{AssignedJob, AssignedWorker},
+    },
 };
 
 use super::{action_area::action_area_reachable, dig::dig_tile};
@@ -20,7 +25,7 @@ impl Plugin for DoDigJobPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PreUpdate,
-            action_area_reachable::<DigJob>.in_set(BigBrainSet::Scorers),
+            action_area_reachable::<DigJob, Without<AssignedWorker>>.in_set(BigBrainSet::Scorers),
         )
         .add_systems(
             PreUpdate,
