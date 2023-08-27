@@ -1,7 +1,11 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use bevy::prelude::{
-    App, Commands, Component, Entity, IntoSystemConfigs, Plugin, PreUpdate, Query, With, Without,
+use bevy::{
+    math::Vec3Swizzles,
+    prelude::{
+        App, Commands, Component, Entity, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate,
+        Query, With, Without,
+    },
 };
 use big_brain::{
     actions::StepsBuilder,
@@ -10,7 +14,7 @@ use big_brain::{
     thinker::{ActionSpan, Actor, ScorerSpan, Thinker, ThinkerBuilder},
     BigBrainSet,
 };
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     actions::{action_area::ActionAreaReachable, do_dig_job::do_dig_job, do_fell_job::do_fell_job},
@@ -19,7 +23,10 @@ use crate::{
         dig_tile::DigJob,
         job::{AssignedJob, AssignedWorker, CanceledJob, Job, JobManagerParams},
     },
+    pathfinding::Pathfinding,
 };
+
+use super::action_area::{self, ActionAreaParam, GlobalActionArea};
 
 pub struct WorkPlugin;
 
@@ -39,8 +46,8 @@ impl Plugin for WorkPlugin {
             PreUpdate,
             (
                 check_job_canceled,
-                pick_job::<FellingJob>,
-                pick_job::<DigJob>,
+                pick_job_shortest_path::<FellingJob>,
+                pick_job_shortest_path::<DigJob>,
                 complete_job,
             )
                 .in_set(BigBrainSet::Actions),
@@ -169,6 +176,69 @@ pub fn pick_job<T: Component>(
             ActionState::Executing => {
                 info!("Picking job");
                 if let Some(job_entity) = jobs.pop() {
+                    info!(job=?job_entity, "Picked job");
+                    job_manager_params.assign_job(job_entity, actor.0);
+                    *action_state = ActionState::Success;
+                } else {
+                    info!("No jobs left to pick");
+                    *action_state = ActionState::Failure;
+                }
+            }
+            ActionState::Cancelled => {
+                info!("Pickup cancelled");
+                *action_state = ActionState::Failure;
+            }
+            _ => {}
+        }
+    }
+}
+
+pub fn pick_job_shortest_path<T: Component + GlobalActionArea>(
+    mut action_query: Query<(&Actor, &mut ActionState, &ActionSpan), With<PickJob<T>>>,
+    job_query: Query<(Entity, &T), Without<AssignedWorker>>,
+    global_transform_query: Query<&GlobalTransform>,
+    mut job_manager_params: JobManagerParams,
+    action_area_param: ActionAreaParam<T>,
+    pathfinding: Pathfinding,
+) {
+    let jobs: Vec<_> = job_query.iter().collect();
+    if jobs.is_empty() {
+        // No jobs to pick from
+        return;
+    }
+
+    for (actor, mut action_state, span) in &mut action_query {
+        let _guard = span.span().enter();
+
+        match *action_state {
+            ActionState::Requested => {
+                info!("Starting picking job");
+                *action_state = ActionState::Executing;
+            }
+            ActionState::Executing => {
+                info!("Picking job");
+                let Ok(actor_position) = global_transform_query.get(actor.0).map(|t| t.translation().xy()) else {
+                    error!("Actor should have a global transform");
+                    *action_state = ActionState::Failure;
+                    continue;
+                };
+
+                let mut shortest_path_len = usize::MAX;
+                let mut shortest_path_job = None;
+                for (job_entity, job) in &jobs {
+                    let action_area = action_area_param.global_action_area(job);
+                    if let Some(action_area) = action_area {
+                        for tile in action_area.0 {
+                            if let Some(path) = pathfinding.find_path(actor_position, tile) {
+                                if path.0.len() < shortest_path_len {
+                                    shortest_path_len = path.0.len();
+                                    shortest_path_job = Some(*job_entity);
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some(job_entity) = shortest_path_job {
                     info!(job=?job_entity, "Picked job");
                     job_manager_params.assign_job(job_entity, actor.0);
                     *action_state = ActionState::Success;

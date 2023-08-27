@@ -44,12 +44,12 @@ pub struct Climbing;
 fn walk(
     mut dude_query: Query<(
         &mut KinematicCharacterController,
-        &Walker,
+        &mut Walker,
         Option<(&mut Jumper, &KinematicCharacterControllerOutput)>,
     )>,
     time: Res<Time>,
 ) {
-    for (mut controller, walker, mut maybe_jumper) in &mut dude_query {
+    for (mut controller, mut walker, mut maybe_jumper) in &mut dude_query {
         if let Some((jumper, controller_output)) = maybe_jumper.as_mut() {
             if jumper.jump && controller_output.grounded {
                 jumper.jump_timer = Some(Timer::from_seconds(0.5, TimerMode::Once));
@@ -65,6 +65,7 @@ fn walk(
         }
 
         let move_direction = walker.move_direction.map(|dir| Vec2::new(dir.x, dir.y));
+        walker.move_direction = None;
 
         controller.translation = controller
             .translation

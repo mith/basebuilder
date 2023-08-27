@@ -68,16 +68,6 @@ impl HasActionPosition for FellTarget {
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct FellTarget(pub Entity);
 
-#[derive(Debug, Reflect)]
-pub struct MoveToFellActionBuilder;
-
-impl ActionBuilder for MoveToFellActionBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(MoveToActionArea::<FellTarget>::build());
-    }
-}
-
 fn at_action_area(actor_position: Vec2, action_area: &ActionArea) -> bool {
     // if we're close to a action area, we're done
     action_area
@@ -202,6 +192,6 @@ fn felling_timer(
 pub fn fell_tree() -> StepsBuilder {
     Steps::build()
         .label("feller")
-        .step(MoveToFellActionBuilder)
+        .step(MoveToActionArea::<FellTarget>::builder())
         .step(Fell)
 }

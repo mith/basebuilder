@@ -90,16 +90,6 @@ impl HasActionPosition for DigTarget {
     }
 }
 
-#[derive(Component, Clone, Debug)]
-struct MoveToTileActionBuilder;
-
-impl ActionBuilder for MoveToTileActionBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(MoveToActionArea::<DigTarget>::build());
-    }
-}
-
 fn dig_work_area(tile_pos: TilePos, terrain: &TerrainParam) -> ActionArea {
     let tile_global_pos = terrain.tile_to_global_pos(tile_pos);
     // All sites around the target tile
@@ -222,6 +212,6 @@ fn dig_timer(
 pub fn dig_tile() -> StepsBuilder {
     Steps::build()
         .label("digger")
-        .step(MoveToTileActionBuilder)
+        .step(MoveToActionArea::<DigTarget>::builder())
         .step(Dig)
 }

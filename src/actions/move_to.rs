@@ -3,14 +3,14 @@ use std::marker::PhantomData;
 use bevy::{
     math::Vec3Swizzles,
     prelude::{
-        App, Component, Entity, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate, Query, Vec2,
-        With,
+        App, Commands, Component, Entity, GlobalTransform, IntoSystemConfigs, Plugin, PreUpdate,
+        Query, Vec2, With,
     },
     reflect::Reflect,
 };
 
 use big_brain::{
-    prelude::ActionState,
+    prelude::{ActionBuilder, ActionState},
     thinker::{ActionSpan, Actor},
     BigBrainSet,
 };
@@ -210,8 +210,21 @@ fn is_between(point: Vec2, start: Vec2, end: Vec2) -> bool {
 pub struct MoveToActionArea<T: HasActionArea>(PhantomData<T>);
 
 impl<T: HasActionArea> MoveToActionArea<T> {
-    pub fn build() -> Self {
-        Self(PhantomData)
+    pub fn builder() -> MoveTaActionAreaBuilder<T> {
+        MoveTaActionAreaBuilder(PhantomData)
+    }
+}
+
+#[derive(Component, Debug, Reflect)]
+pub struct MoveTaActionAreaBuilder<T: HasActionArea>(PhantomData<T>);
+
+impl<T> ActionBuilder for MoveTaActionAreaBuilder<T>
+where
+    T: HasActionArea + std::fmt::Debug + std::marker::Sync + std::marker::Send + 'static,
+{
+    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+        cmd.entity(scorer)
+            .insert(MoveToActionArea::<T>(PhantomData));
     }
 }
 
@@ -269,7 +282,8 @@ pub fn move_to_action_area<T: GlobalActionArea + Component>(
                     let path = action_area
                         .0
                         .iter()
-                        .find_map(|&tile| pathfinding.find_path(actor_position, tile));
+                        .flat_map(|&tile| pathfinding.find_path(actor_position, tile))
+                        .min_by(|a, b| a.0.len().cmp(&b.0.len()));
                     if let Some(path) = path {
                         let mut walker = walker_query
                             .get_mut(actor.0)
